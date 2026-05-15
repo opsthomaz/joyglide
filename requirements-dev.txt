@@ -29,4 +29,4 @@ cosmic-ray>=8.4
 cohesion>=1.2
 
 # Pre-commit hooks (optional — `pre-commit install` to enable)
-pre-commit>=3.7
+pre-commit>=4.6.0
