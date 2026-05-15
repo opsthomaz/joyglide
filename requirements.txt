@@ -20,7 +20,7 @@ pyobjc-framework-Cocoa>=10.0;               sys_platform == 'darwin'
 # wheel the call in mouse_macos.request_accessibility silently no-ops on
 # a fresh install (the bare except swallows the ModuleNotFoundError).
 pyobjc-framework-ApplicationServices>=10.0; sys_platform == 'darwin'
-py2app>=0.28.8;                             sys_platform == 'darwin'
+py2app>=0.28.10;                             sys_platform == 'darwin'
 
 # ── Windows only ─────────────────────────────────────────────────────────
 # Note: we DO NOT depend on `winsdk` here. bleak already pulls in
