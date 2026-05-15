@@ -1,0 +1,25 @@
+# CODEOWNERS — GitHub auto-requests review per path.
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Single maintainer for now — every change requests review from
+# @opsthomaz. The path-specific rules below document which areas are
+# protocol-critical / blueprint-critical so contributors know what
+# they're touching even before branch protection is configured.
+
+# Default — everything not matched below.
+*                               @opsthomaz
+
+# ── Protocol-critical: hardware-verified, regressions hard to find ──
+/ble/                           @opsthomaz
+/parser/                        @opsthomaz
+/research/                      @opsthomaz
+/docs/ARCHITECTURE.md           @opsthomaz
+/docs/RESEARCH.md               @opsthomaz
+/CLAUDE.md                      @opsthomaz
+
+# ── Architectural contracts: changing reshapes the import graph ──
+/.importlinter                  @opsthomaz
+
+# ── CI / supply-chain: changes here affect what gets built and shipped ──
+/.github/                       @opsthomaz
+/packaging/                     @opsthomaz

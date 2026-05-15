@@ -1,0 +1,82 @@
+[importlinter]
+root_packages =
+    ble
+    parser
+    engine
+    osio
+    ui
+include_external_packages = True
+
+# ─── Layered architecture contract ──────────────────────────────────────
+# The blueprint defines a directional dependency graph:
+#
+#   ui ────────┐
+#              ▼
+#   tray, bg_loop, main ──▶ ble ──▶ osio
+#              │           │
+#              ▼           ▼
+#           parser ───▶ engine ──▶ osio
+#              │           │
+#              ▼           ▼
+#           parser → user_preferences  (settings dict)
+#                       osio
+#
+# These contracts make the directionality explicit so a future PR can't
+# silently introduce a cycle (e.g. parser/ importing ui/) that would
+# subvert the modular structure.
+
+[importlinter:contract:ble-may-not-import-ui]
+name = ble must not depend on ui
+type = forbidden
+source_modules =
+    ble
+forbidden_modules =
+    ui
+
+[importlinter:contract:parser-may-not-import-ui-or-ble]
+name = parser must not depend on ui or ble (it only consumes raw bytes + state)
+type = forbidden
+source_modules =
+    parser
+forbidden_modules =
+    ui
+    ble
+    tray
+    bg_loop
+
+[importlinter:contract:engine-may-not-import-ui-or-ble]
+name = engine must not depend on ui, ble, or parser
+type = forbidden
+source_modules =
+    engine
+forbidden_modules =
+    ui
+    ble
+    parser
+    tray
+    bg_loop
+
+[importlinter:contract:osio-must-be-leaf]
+name = osio is a leaf — no first-party imports allowed back upward
+type = forbidden
+source_modules =
+    osio
+forbidden_modules =
+    ble
+    parser
+    engine
+    ui
+    tray
+    bg_loop
+    main
+    joycon
+    player
+    solo_logic
+
+[importlinter:contract:ui-may-not-import-ble-directly]
+name = ui must not import ble directly (it goes through main's command queue)
+type = forbidden
+source_modules =
+    ui
+forbidden_modules =
+    ble

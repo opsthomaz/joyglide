@@ -1,0 +1,21 @@
+# pip-audit ignore list — CVEs that don't apply to our usage.
+#
+# Format: one VULN-ID per line. Comments allowed.
+#
+# ──────────────────────────────────────────────────────────────────────
+# PYSEC-2022-42969 — `py` 1.11.0 ReDoS via crafted Subversion repo info
+#
+# Vulnerable path: py.path.svnwc (InfoSvnCommand argument handling)
+# Pulled in by: interrogate (dev-only, docstring coverage tool)
+#
+# Why we ignore:
+#   1. The `py` library is ARCHIVED upstream — no fix will ever ship.
+#   2. interrogate uses py.io (terminal output) — never py.path.svnwc.
+#   3. Our app doesn't touch Subversion at all.
+#   4. interrogate runs only in CI lint, never in the shipped .app/.exe.
+#   5. No remote attack surface — there's no SVN-handling code in any
+#      reachable execution path.
+#
+# Reviewed: 2026-05-03 (current state). Re-evaluate if interrogate ever
+# starts using py.path.svnwc, or if a maintained fork of `py` is found.
+PYSEC-2022-42969

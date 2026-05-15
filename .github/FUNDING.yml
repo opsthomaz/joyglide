@@ -1,0 +1,9 @@
+# GitHub Sponsors button in the repo sidebar.
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
+#
+# Renders nothing until the referenced account is actually enrolled
+# in the relevant platform, so it's safe to commit before enrolment.
+
+github: [opsthomaz]
+# ko_fi: your-handle             # uncomment + fill once enrolled
+# buy_me_a_coffee: your-handle   # uncomment + fill once enrolled

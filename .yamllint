@@ -1,0 +1,29 @@
+# yamllint config — pragmatic settings for GitHub Actions workflows.
+#
+# Defaults are too strict for our use case:
+#   * `document-start` warning for missing `---` — we don't need it on
+#     workflow files; convention is to omit it.
+#   * `truthy` warning for `on:` keyword (legacy YAML 1.1 reads it as
+#     boolean True). GitHub Actions REQUIRES `on:` and not `"on":`.
+#   * `line-length` 80 is a tighter cap than our YAML naturally needs;
+#     comments and run lines often go past 80. Bump to 120.
+
+extends: default
+
+rules:
+  document-start: disable
+  truthy:
+    check-keys: false        # allow `on:` without warning
+  line-length:
+    max: 120
+    allow-non-breakable-words: true
+    allow-non-breakable-inline-mappings: true
+  comments:
+    min-spaces-from-content: 1   # `# comment` not just `#comment`
+
+ignore: |
+  research/
+  build/
+  dist/
+  .venv*
+  mutants/

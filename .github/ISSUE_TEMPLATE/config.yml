@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: 💬 Have a question or need help?
+    url: https://github.com/opsthomaz/joyglide/discussions
+    about: |
+      For general questions, hardware compatibility reports, and
+      "how do I do X?" — open a Discussion instead of an Issue.
+
+  - name: 🔒 Found a security vulnerability?
+    url: https://github.com/opsthomaz/joyglide/security/advisories/new
+    about: |
+      Please use private security advisories instead of public issues.
+      See SECURITY.md for the full disclosure policy.

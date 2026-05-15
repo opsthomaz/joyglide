@@ -1,0 +1,43 @@
+# Pinned (mirror of pyproject.toml). Used by:
+#   pip install -r requirements.txt
+#   build_windows.ps1
+#   .github/workflows/build.yml
+#
+# pip honors `; sys_platform == ...` markers automatically — only the
+# matching lines for the current OS get installed.
+
+# ── Core (cross-platform) ────────────────────────────────────────────────
+bleak>=1.0.1
+pillow>=12.2.0
+pystray>=0.19.5
+platformdirs>=4.3.6
+customtkinter>=5.2.2
+
+# ── macOS only ───────────────────────────────────────────────────────────
+pyobjc-framework-Quartz>=10.0;              sys_platform == 'darwin'
+pyobjc-framework-Cocoa>=10.0;               sys_platform == 'darwin'
+# AXIsProcessTrustedWithOptions for the Accessibility prompt; without this
+# wheel the call in mouse_macos.request_accessibility silently no-ops on
+# a fresh install (the bare except swallows the ModuleNotFoundError).
+pyobjc-framework-ApplicationServices>=10.0; sys_platform == 'darwin'
+py2app>=0.28.8;                             sys_platform == 'darwin'
+
+# ── Windows only ─────────────────────────────────────────────────────────
+# Note: we DO NOT depend on `winsdk` here. bleak already pulls in
+# `winrt-Windows.Devices.Bluetooth` (the older `winrt-runtime` projection).
+# Mixing the two projections (winrt + winsdk) breaks the marshaller because
+# their Python types are distinct even when they wrap the same WinRT class —
+# the call would fail with "TypeError: convert_to returned null". So
+# platform_setup.py imports BluetoothLEPreferredConnectionParameters from
+# `winrt`, matching what bleak already uses internally.
+
+# ── Linux only ───────────────────────────────────────────────────────────
+# evdev drives the kernel-level uinput cursor injection (osio/mouse/linux.py)
+# AND the Ctrl+Alt+M global hotkey listener (osio/hotkey/linux.py). Same
+# library coffincolors/jc2mouse uses — well-tested, widely-shipped, no
+# transitive baggage. Membership in the `input` group + the standard udev
+# rule on /dev/uinput is the runtime requirement.
+evdev>=1.6.1; sys_platform == 'linux'
+
+# ── Build/packaging (cross-platform) ─────────────────────────────────────
+pyinstaller>=6.14.2

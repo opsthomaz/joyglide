@@ -1,0 +1,39 @@
+# Dependabot — automated PRs for outdated and vulnerable dependencies.
+# Combined with the "automated security fixes" feature enabled at the repo
+# level, vulnerable deps get patched automatically; non-security updates
+# come as PRs we can review and merge.
+#
+# Docs: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates
+
+version: 2
+updates:
+  # ── Python deps (requirements.txt) ──────────────────────────────────────
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "python"
+    # Group minor + patch updates into a single PR per week to reduce noise.
+    # Major updates still come as individual PRs so we can vet them.
+    groups:
+      python-minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  # ── GitHub Actions ──────────────────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"

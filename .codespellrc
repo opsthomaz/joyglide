@@ -1,0 +1,5 @@
+[codespell]
+# `datas` is a PyInstaller spec field name (the spec format predates Python's
+# tendency to expect singular forms). Not a typo of "data".
+ignore-words-list = datas
+skip = *.json,*.lock,research,build,dist,.venv,.git,uv.lock,Archive.zip,mutants,*.icns,*.iconset

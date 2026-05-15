@@ -1,0 +1,27 @@
+# cosmic-ray config — AST mutation testing for the parser/ package.
+#
+# Why cosmic-ray and not mutmut for this scope:
+#   mutmut 3.x's stats-collection conflicts with our package layout
+#   plus conftest sys.path manipulation; it silently reports "0
+#   mutants tested" on parser/. cosmic-ray uses an entirely different
+#   model — a SQLite session DB + per-mutant test runs — which sidesteps
+#   the import-tracing fragility.
+#
+# Workflow (see packaging/run_cosmic_ray.sh for the wrapper):
+#   .venv/bin/cosmic-ray init cosmic-ray.toml session.sqlite
+#   .venv/bin/cosmic-ray exec cosmic-ray.toml session.sqlite
+#   .venv/bin/cr-report session.sqlite
+#
+# Pointed at parser/u16_delta.py by default — smallest file, fastest
+# feedback loop, ~10 mutants. To target other parser modules, change
+# `module-path` and re-run init. The full parser/ package generates
+# ~1400 mutants which takes ~30 min on a laptop; run nightly / in CI
+# rather than interactively.
+[cosmic-ray]
+module-path = "parser/u16_delta.py"
+timeout = 10.0
+excluded-modules = []
+test-command = ".venv/bin/python -m pytest -x -q tests/test_property.py::test_delta_u16_in_signed_range tests/test_property.py::test_delta_u16_zero_when_equal tests/test_property.py::test_delta_u16_antisymmetric tests/test_property.py::test_delta_u16_consistent_with_unsigned_delta tests/test_joycon.py::TestDeltaU16"
+
+[cosmic-ray.distributor]
+name = "local"

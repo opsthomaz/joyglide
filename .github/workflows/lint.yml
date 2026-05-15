@@ -1,0 +1,139 @@
+name: Lint and test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.14"
+      - name: Install runtime + dev deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r requirements-dev.txt
+      - name: Run pytest with coverage
+        run: pytest --cov=. --cov-report=term-missing --cov-report=xml
+      - name: Upload coverage to artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: warn
+
+  static-analysis:
+    name: Static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.14"
+
+      - name: Install analysis tools
+        run: |
+          python -m pip install --upgrade pip
+          # Two type checkers (mypy + pyright) catch slightly different things;
+          # ruff is the fast linter; bandit is security; vulture finds dead code;
+          # interrogate measures docstring coverage; deptry surfaces unused deps.
+          python -m pip install \
+            ruff mypy pyright bandit vulture interrogate deptry \
+            xenon codespell yamllint import-linter pip-audit
+          # We also need the project's deps so type checkers have full info.
+          python -m pip install -r requirements.txt
+
+      # ─── Ruff: bugs + style (replaces flake8 + isort + pyupgrade) ──────
+      - name: Ruff
+        run: ruff check . --output-format=github
+        continue-on-error: true
+
+      # ─── mypy: gradual type checker (config in pyproject.toml) ─────────
+      - name: mypy
+        run: mypy . --no-error-summary
+        continue-on-error: true
+
+      # ─── pyright: stricter, faster type checker (Microsoft) ────────────
+      # Catches things mypy misses and vice versa. Same config (pyproject.toml).
+      - name: pyright
+        run: pyright --outputjson > pyright-report.json || true
+        continue-on-error: true
+
+      # ─── bandit: security-focused linter ───────────────────────────────
+      - name: Bandit
+        run: bandit -c pyproject.toml -r . -ll
+        continue-on-error: true
+
+      # ─── vulture: dead-code detector ───────────────────────────────────
+      - name: Vulture
+        # `./*.py` (instead of bare `*.py`) so a future filename starting
+        # with `-` doesn't get glob-expanded into a flag (shellcheck SC2035).
+        run: vulture ./*.py --min-confidence 80 || true
+
+      # ─── interrogate: docstring coverage % ─────────────────────────────
+      # Surfaces missing module/class/method docstrings. We aim for >=80%.
+      - name: Interrogate (docstring coverage)
+        # Threshold + excludes come from pyproject.toml [tool.interrogate].
+        run: interrogate -v ./*.py || true
+
+      # ─── deptry: detect unused / missing imports vs requirements ──────
+      - name: Deptry (unused / missing dependency check)
+        # Excludes come from pyproject.toml [tool.deptry].
+        run: deptry . || true
+
+      # ─── codespell: typo detection (config in .codespellrc) ────────────
+      - name: Codespell (typos)
+        run: codespell || true
+
+      # ─── yamllint: workflow YAML hygiene (config in .yamllint) ─────────
+      - name: Yamllint (workflow YAML)
+        run: yamllint .github/workflows/ || true
+
+      # ─── import-linter: enforce architectural boundaries (HARD FAIL) ───
+      # Contracts in .importlinter pin the layered dependency graph:
+      # parser/ ↛ ui/, engine/ ↛ ble/, osio/ is a leaf, etc. If a future
+      # PR introduces an import that violates the blueprint, this fails.
+      - name: Import-linter (architectural contracts)
+        run: lint-imports
+
+      # ─── pip-audit: known-CVE check on installed deps ──────────────────
+      # Ignores listed in .pip-audit-ignore — currently just PYSEC-2022-42969
+      # in `py` 1.11.0 (transitive via interrogate; vulnerable code path
+      # is py.path.svnwc which we never reach). See file for rationale.
+      - name: pip-audit (CVE scan)
+        run: |
+          pip-audit --local --ignore-vuln PYSEC-2022-42969 || true
+
+      # ─── xenon: cyclomatic-complexity gate (HARD FAIL — no continue-on-error) ─
+      - name: Xenon (complexity gate)
+        # Thresholds — chosen deliberately, NOT relaxed:
+        #   --max-absolute C  → no single function may exceed rank C (CC > 20).
+        #   --max-modules  C  → no module may exceed rank C on average.
+        #   --max-average  A  → average across the codebase must stay rank A.
+        # Why per-block AND per-module ceilings are both C (not B for
+        # modules): the parser/ package files (parser/buttons.py,
+        # parser/mouse_optical.py, parser/sticks.py) plus engine/motion_pump.py
+        # each contain a single function that's inherently branch-heavy by
+        # domain (BLE input report fields × 3 motion profiles × pause
+        # gating). When the only function in a module is rank C, the
+        # module average is also C. Same shape applies to
+        # osio.boost.request_throughput_optimized (Windows version + chip
+        # fallbacks) and ui.process_queue (event-type dispatcher).
+        # Splitting them further would add indirection without reducing
+        # branch count. Rank C is accepted as the cost of protocol/dispatch
+        # work; this gate exists to prevent a future PR from pushing
+        # anything to D or worse. Scoped to root + new packages.
+        # --ignore (not --exclude) skips entire directory subtrees. Excludes
+        # research/ (third-party clones), build/dist/packaging/.venv
+        # (output/build), mutants/ (mutmut scratch), and tests/ (test code
+        # allowed to be more complex).
+        run: >-
+          xenon --max-absolute C --max-modules C --max-average A .
+          --ignore=research,build,dist,packaging,.venv,mutants,tests

@@ -1,0 +1,32 @@
+# Development-only dependencies. Install with:
+#   pip install -r requirements-dev.txt
+# Used by the CI lint and test workflows; not bundled into release artifacts.
+
+# Test runner + coverage
+pytest>=8.0
+pytest-cov>=5.0
+
+# Static analysis (also runs in CI lint workflow)
+ruff>=0.6
+mypy>=1.10
+pyright>=1.1.380
+bandit>=1.7
+vulture>=2.10
+interrogate>=1.7
+deptry>=0.20
+radon>=6.0
+xenon>=0.9
+codespell>=2.3
+yamllint>=1.35
+import-linter>=2.0
+hypothesis>=6.100
+pip-audit>=2.7
+mutmut>=3.0
+# cosmic-ray covers the parser/ package where mutmut hits its package-import
+# wall — see packaging/run_cosmic_ray.sh for the workflow. Validated 100%
+# mutation score on parser/u16_delta.py.
+cosmic-ray>=8.4
+cohesion>=1.2
+
+# Pre-commit hooks (optional — `pre-commit install` to enable)
+pre-commit>=3.7

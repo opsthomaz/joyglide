@@ -1,0 +1,42 @@
+# Citation File Format — https://citation-file-format.github.io/
+# GitHub renders a "Cite this repository" button in the repo sidebar
+# from this file. Schema: cff-version 1.2.0.
+
+cff-version: 1.2.0
+title: Joyglide
+message: >-
+  If you use this software or reference its protocol-research
+  findings, please cite as below.
+type: software
+authors:
+  - given-names: Thomaz
+    family-names: Doronides
+    email: tdoronides@gmail.com
+    alias: opsthomaz
+repository-code: 'https://github.com/opsthomaz/joyglide'
+url: 'https://github.com/opsthomaz/joyglide'
+abstract: >-
+  Cross-platform desktop application that pairs a Nintendo Switch 2
+  Joy-Con over Bluetooth Low Energy and uses its optical sensor as a
+  native macOS / Windows mouse. The project also contributes
+  hardware-verified corrections to the open Joy-Con 2 BLE protocol
+  catalog — including the IMU timestamp scale (1 MHz, not 50 kHz),
+  the battery-current scale (raw / 100 = mA), the feature-mask 0xFF
+  requirement, and the write-command length-byte semantics. All
+  protocol claims are tier-rated (S = hardware-verified, A = methodical
+  reverse-engineering, B = official platform docs, etc.) and cross-
+  checked against working third-party drivers in research/.
+keywords:
+  - joy-con
+  - joycon
+  - nintendo-switch-2
+  - bluetooth-low-energy
+  - ble
+  - reverse-engineering
+  - input-device
+  - mouse
+  - macos
+  - windows
+license: GPL-3.0-or-later
+version: 0.1.0
+date-released: '2026-05-15'

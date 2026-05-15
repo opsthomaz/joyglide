@@ -1,0 +1,146 @@
+[project]
+name = "joyglide"
+version = "0.1.0"
+description = "Use a Nintendo Switch 2 Joy-Con as a mouse"
+readme = "README.md"
+requires-python = ">=3.13"
+
+# NOTE: dependencies are declared in `requirements.txt`, not here.
+# py2app 0.28+ refuses to build if setuptools injects `install_requires`
+# (which it does automatically when [project.dependencies] is present),
+# so we keep this file metadata-only. Run `pip install -r requirements.txt`
+# to install — that file has full sys_platform markers for cross-OS deps.
+
+[build-system]
+requires = ["setuptools>=78.1.1"]
+build-backend = "setuptools.build_meta"
+
+# ── Static-analysis tooling config ───────────────────────────────────────
+# All run in CI via .github/workflows/lint.yml, see also requirements-dev.txt
+
+[tool.ruff]
+line-length = 120
+exclude = ["research/", ".venv*", "build/", "dist/", "packaging/"]
+target-version = "py313"
+
+[tool.ruff.lint]
+# Curated rule set — opinionated subset that catches real bugs without
+# nitpicking style choices we deliberately made.
+select = [
+    "E", "W",   # pycodestyle errors and warnings
+    "F",        # pyflakes (undefined names, unused imports, etc.)
+    "B",        # flake8-bugbear (real bug patterns)
+    "C4",       # flake8-comprehensions
+    "SIM",      # flake8-simplify (suggests cleaner expressions)
+    "UP",       # pyupgrade (modern Python idioms)
+    "RUF",      # ruff's own rules
+]
+ignore = [
+    "E501",     # line too long — we have a few intentional long lines (URLs, sysctl etc.)
+    "SIM108",   # ternary suggestion — sometimes if/else is clearer
+    "B008",     # function call in default arg — we use this intentionally for ctypes
+    "RUF001",   # × (multiplication sign) is intentional in docstrings ("4× macOS")
+    "RUF002",   # same in docstrings
+    "RUF003",   # × / – in comments — visual aid, not a typo
+    "RUF012",   # `_fields_ = [...]` on ctypes.Structure is REQUIRED by the ctypes API
+    "E701",     # `if cond: x = y` short single-line ifs are easier to scan in tables
+    "E702",     # tolerated semi-colon usage in cosmetic alignment
+]
+
+[tool.mypy]
+python_version = "3.13"
+ignore_missing_imports = true   # bleak/winrt/Quartz aren't typed
+exclude = ['packaging/', 'research/']
+# Don't be too strict — this is a hobby project not a library.
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+# bleak's internal _device, _backend etc. are private but we use them
+# deliberately. Same for ctypes.WinDLL / ctypes.get_last_error in the
+# Windows-only modules — those don't exist as attributes when mypy runs
+# on macOS, but they're never reached at runtime there either.
+module = ["main", "osio.boost", "osio.mouse.windows", "osio.hotkey.windows"]
+disable_error_code = ["attr-defined"]
+
+[tool.bandit]
+# subprocess + try/except/pass are intentional in our code paths.
+# B404 (subprocess import) and B603 (subprocess without shell=True) are
+# false positives — using subprocess without shell=True is the SECURE pattern.
+skips = ["B101", "B404", "B603", "B607", "B110"]
+exclude_dirs = [".venv", "research", "build", "dist", "packaging"]
+
+[tool.pyright]
+# Second-opinion type checker (Microsoft Pylance backend).
+include = ["main.py", "joycon.py", "player.py", "solo_logic.py",
+           "user_preferences.py", "utils.py", "applog.py",
+           "tray.py", "bg_loop.py",
+           "ble", "parser", "engine", "ui", "osio"]
+exclude = ["research/", ".venv*", "build/", "dist/", "packaging/",
+           "**/mutants/**"]
+# Point pyright at our venv so it can resolve customtkinter / pystray /
+# bleak / Quartz / Foundation / etc. — without this, every native dep
+# import shows up as "could not be resolved" noise that drowns real
+# warnings.
+venvPath = "."
+venv = ".venv"
+# Silence categories that are intentional given the platform-dispatcher
+# pattern: ctypes.WinDLL is Windows-only (mypy/pyright on macOS can't see
+# it, but at runtime the sys.platform branch never reaches that code on
+# the wrong OS); bleak's `_backend` private attrs we use deliberately.
+reportMissingImports = "none"           # native deps now resolved via venv
+reportMissingModuleSource = "none"
+reportAttributeAccessIssue = "none"     # platform cross-checks + bleak privates
+# CTkSlider's stub annotates from_/to as int but it accepts float at
+# runtime (we use floats for the sensitivity slider's 0.1 increments).
+reportArgumentType = "none"
+pythonVersion = "3.13"
+
+[tool.deptry]
+# pyproject.toml is metadata-only (py2app compat — see comment in packaging/setup.py),
+# so requirements.txt is our real dependency manifest.
+requirements_files = ["requirements.txt"]
+known_first_party = ["applog", "ble", "bg_loop", "engine", "joycon",
+                     "osio", "parser", "player", "solo_logic", "tray",
+                     "ui", "user_preferences", "utils"]
+# DEP003 (transitive imports) is too noisy for our split-deps setup —
+# it flags every direct dep we list because deptry can't easily reconcile
+# requirements.txt entries with installed package metadata across all our
+# OS-conditional deps. We focus on DEP001 (truly missing), DEP002 (unused),
+# DEP004 (dev-only used in prod).
+# Also ignore winrt — provided by winrt-Windows.Devices.Bluetooth which
+# deptry can't resolve back to the `winrt` namespace cleanly.
+ignore = ["DEP003"]
+ignore_notebooks = true
+extend_exclude = ["research", "build", "dist", "packaging"]
+per_rule_ignores = { "DEP001" = ["winrt"] }
+
+[tool.pytest.ini_options]
+# Test runner config. Tests live in tests/, project code is at root.
+# conftest.py adds root to sys.path so tests can `from utils import ...`.
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+# Suppress warnings from deps so test output stays focused on real failures.
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+addopts = [
+    "-ra",          # short summary of all non-passed outcomes
+    "--strict-markers",
+    "--tb=short",   # tracebacks readable on terminal
+]
+
+[tool.interrogate]
+# Docstring coverage. Production-code modules sit at 70-100%, but main.py
+# and ui.py have many tiny pystray/Tk callback functions where a docstring
+# would be cargo-culting. Threshold tuned so meaningful modules are
+# enforced without forcing every one-line closure to grow noise.
+fail-under = 30
+ignore-init-module = true
+ignore-private     = true
+ignore-magic       = true
+ignore-nested-functions = true
+exclude = ["research", "build", "dist", "packaging"]

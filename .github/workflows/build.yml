@@ -1,0 +1,104 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Required so the `softprops/action-gh-release` step can attach the built
+# artifacts to a release on tag pushes. Default GITHUB_TOKEN is read-only.
+permissions:
+  contents: write
+
+jobs:
+  # ───────────────────────── Windows .exe ────────────────────────────────
+  build-windows:
+    name: Windows .exe
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Python 3.14
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Generate .ico from PNG
+        shell: pwsh
+        run: |
+          python -c @"
+          from PIL import Image
+          img = Image.open('assets/joyglide.png').convert('RGBA')
+          sizes = [(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)]
+          img.save('assets/joyglide.ico', sizes=sizes)
+          print('icon written')
+          "@
+
+      - name: Build with PyInstaller
+        shell: pwsh
+        run: pyinstaller --clean --noconfirm packaging/joyglide_windows.spec
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: Joyglide-windows
+          path: dist/Joyglide.exe
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda  # v3
+        with:
+          files: dist/Joyglide.exe
+
+  # ───────────────────────── macOS .app ──────────────────────────────────
+  build-macos:
+    name: macOS .app
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Python 3.14
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Generate .icns from PNG
+        run: |
+          mkdir -p Joyglide.iconset
+          chmod +x packaging/create_icons_script.sh
+          ./packaging/create_icons_script.sh
+
+      - name: Build with PyInstaller
+        run: pyinstaller --clean --noconfirm packaging/joyglide_macos.spec
+
+      - name: Zip the .app
+        run: |
+          cd dist && zip -ry Joyglide-macos.zip Joyglide.app
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: Joyglide-macos
+          path: dist/Joyglide-macos.zip
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda  # v3
+        with:
+          files: dist/Joyglide-macos.zip

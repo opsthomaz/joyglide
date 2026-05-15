@@ -1,0 +1,59 @@
+Joyglide
+============
+
+Copyright (C) 2026 Thomaz Doronides <tdoronides@gmail.com>
+Copyright (C) 2025 Mateus Outella ("moutella") and contributors
+
+This product includes software derived from joycon2mouse by moutella
+(https://github.com/moutella/joycon2mouse), originally licensed under
+the MIT License. The current work — including the modular blueprint
+refactor (ble/, parser/, engine/, ui/, osio/), Windows port, motion
+profiles, and supporting tooling — is licensed under GPL-3.0-or-later.
+
+──────────────────────────────────────────────────────────────────────
+Why this NOTICE exists
+──────────────────────────────────────────────────────────────────────
+
+The MIT license that covered the upstream code grants the right to
+sublicense — meaning derivative works MAY adopt a different (typically
+more restrictive) license. v0.4.0 onwards is GPL-3.0-or-later because
+the maintainer wants to ensure that future forks and derived works
+remain free and accessible to everyone.
+
+The original moutella code remains available under MIT in its own
+repository. Any code in this repository that traces back to that
+upstream IS still MIT-licensed at its origin point; only the combined
+work distributed here is governed by the GPL-3.0-or-later terms.
+
+──────────────────────────────────────────────────────────────────────
+Third-party dependencies (runtime)
+──────────────────────────────────────────────────────────────────────
+
+The shipped binaries embed the following third-party libraries.
+All are GPL-3.0-compatible; see README.md "Third-party dependency
+licensing" section for the full breakdown.
+
+  bleak                                 MIT
+  pillow                                MIT-CMU
+  pystray                               LGPL-3.0
+  platformdirs                          MIT
+  customtkinter                         MIT
+  pyobjc-framework-{Quartz,Cocoa,...}   MIT
+  py2app                                MIT / PSF
+  pyinstaller                           GPL-2.0 + bootloader exception
+
+──────────────────────────────────────────────────────────────────────
+Reference / research repositories cloned into research/
+──────────────────────────────────────────────────────────────────────
+
+These are NOT distributed in our binaries — they live in research/
+locally for cross-reference only (the directory is gitignored). Each
+has its own license; consult the upstream repositories for terms.
+
+  ndeadly/switch2_controller_research
+  TheFrano/joycon2cpp
+  TheFrano/joycon2py
+  Misaka10571/joycon2-connector
+  german77/JoyconDriver
+  coffincolors/jc2mouse
+  moutella/joycon2mouse
