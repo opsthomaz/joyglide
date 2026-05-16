@@ -12,7 +12,11 @@ Why sync, not async:
     allocation; at 33-67 Hz that's a small but constant win in the
     hottest path of the entire application.
 """
+import time
 from typing import TYPE_CHECKING
+
+from latency_trace import bleak_callback_start_ns
+from user_preferences import settings
 
 if TYPE_CHECKING:
     from joycon import JoyCon
@@ -31,8 +35,16 @@ def handle_single_notification(sender, data: bytes, gamepad: "JoyCon | None") ->
     3. ``process_mouse`` — the latency-critical path.
     4. ``process_buttons`` / ``process_sticks`` — order between them is
        irrelevant.
+
+    When ``settings["latency_trace"]`` is on, stamps a contextvar with
+    ``time.perf_counter_ns()`` so the synchronous Gaming-profile path
+    in ``osio.mouse.macos._post`` can compute end-to-end internal
+    latency (BLE callback → pre-CGEventPost). Default-False; the
+    timestamp is skipped entirely when off.
     """
     if gamepad:
+        if settings.get("latency_trace", False):
+            bleak_callback_start_ns.set(time.perf_counter_ns())
         gamepad.track_packet_rate()
         gamepad.process_battery(data)
         gamepad.process_mouse(data)

@@ -101,3 +101,115 @@ We implemented three different drainage and acceleration logics to embrace any A
 ## 5. Next Steps (front-end)
 
 The application base and the input engine are complete and operating at native driver level. The focus now should be migrating the settings scattered across the system tray (`pystray`) and primitive windows (`tkinter`) into a unified, modern control panel (front-end).
+
+---
+
+## 6. Latency Budget — Empirical Measurement (Tier S, instrumented 2026-05-16)
+
+Earlier sections estimate the userspace latency contribution at "microseconds, negligible vs the 30 ms BLE cap." This section replaces that estimate with **instrumented measurement** via the `latency_trace.py` module added on 2026-05-16 (settings flag `latency_trace`, off by default — zero cost when disabled).
+
+The headline result: **the Joyglide userspace pipeline contributes ~110 µs at p50 from BLE callback dispatch to Quartz event injection, representing ~0.37% of the macOS BLE LL interval budget.** The bottleneck is provably and overwhelmingly the BLE LL interval, not the Python/CG code.
+
+### 6.1 Methodology
+
+**Hardware / software**
+
+| Component | Version |
+|---|---|
+| Mac model | `Mac16,12` (MacBook Air M4) |
+| macOS | 26.4.1 build 25E253 |
+| Display | 1920×1248 @ 60.0 Hz (internal) |
+| Python | 3.13.13 (Homebrew + python-tk@3.13) |
+| `bleak` | 3.0.2 |
+| Joyglide | post-v0.1.0 main (commit at measurement time) |
+| Joy-Con 2 | JC-R, firmware **2.1.4.1** (verified via cmd `0x10/0x01`) |
+
+**Three perf_counter_ns timestamps per event**
+
+```
+t0  =  bleak notification callback entry        (set by solo_logic, contextvar)
+t1  =  immediately before CGEventPost           (set by osio.mouse.macos._post)
+t2  =  immediately after CGEventPost            (set by osio.mouse.macos._post)
+```
+
+**Two derived spans**
+
+| Span | Definition | What it isolates |
+|---|---|---|
+| `internal_us` | `t1 − t0` | Joyglide's own pipeline: BLE callback → parser → dispatch → CGEvent build |
+| `cgevent_us` | `t2 − t1` | Quartz's `CGEventPost` cost only (kernel-side HID injection) |
+
+`internal_us` is recorded only when `t0` is visible to `_post` — i.e. the synchronous call path. That covers (a) all motion in **Gaming profile** (parser calls `mouse_move` directly within the BLE callback) and (b) **all button events** in any profile (parser.buttons calls `mouse_down`/`mouse_up` synchronously). Motion in Dynamic / Cinematic flows through the async `engine.motion_pump` task and the contextvar is not visible there — so for those profiles `internal_us` reflects button events only and is intentionally not recorded for motion (we don't have an honest single `t0` to subtract from when the pump fires asynchronously from packet N+2 carrying motion from packets N and N+1).
+
+`cgevent_us` is recorded on every `_post` call regardless of profile and is therefore directly comparable across profiles.
+
+**Sampling**
+
+- Per-span ring buffer: `deque(maxlen=200)` ≈ **6 s at 33 Hz** (1 BLE packet per 30 ms macOS cap).
+- Aggregation: emit `p50 / p95 / max1s / alltime_max` once per second per span.
+- The `alltime_max` carries the active **profile** in its captured context — outliers can be diagnosed (Gaming vs Dynamic provenance).
+- Workload: continuous JC2 motion on a hard surface + occasional button presses, ~30 s per profile, with steady-state samples (last 30 emissions) used for the headline numbers.
+
+### 6.2 Results — Gaming profile (synchronous path)
+
+Last 30 steady-state emissions during continuous motion (`profile=gaming`):
+
+| Span | p50 | p95 (median across emissions) | max1s (worst per-second window, median) | alltime_max (single all-session worst) |
+|---|---|---|---|---|
+| `internal_us` | **36 µs** | 51 µs | 92 µs | 67,973 µs (one-time startup outlier) |
+| `cgevent_us` | **74 µs** | 112 µs | 580 µs | 11,338 µs (one-time startup outlier) |
+| **Total userspace (sum)** | **~110 µs** | ~163 µs | ~672 µs | — |
+
+Range across the 30 sample windows: `internal_us` p50 26–39 µs · `cgevent_us` p50 49–82 µs. Tight steady-state distribution.
+
+### 6.3 Results — Dynamic profile (async pump path)
+
+For this profile `cgevent_us` is the directly comparable metric (motion + buttons both call `_post`, profile-independent kernel cost). `internal_us` here reflects **button events only** and has small sample counts.
+
+| Span | p50 | p95 | Notes |
+|---|---|---|---|
+| `cgevent_us` | **~74 µs** | ~112 µs | Identical to Gaming within noise (profile-independent — Quartz cost) |
+| `internal_us` (buttons only) | ~30–50 µs | — | Small-N; consistent with Gaming's measured internal_us, suggesting the parser+dispatch cost is the same whether the BLE callback calls `mouse_move` (Gaming) or `mouse_down` (button) |
+
+**Pump-quantization overhead** (not measured here, structural): the pump runs at display refresh (60 Hz on this hardware = 16.7 ms tick), so a packet whose motion is accumulated at `_dx_accum` waits 0–16.7 ms before the next pump tick drains it. That latency is **a deliberate trade for smoothness** (interpolation across BLE packets) and is independent of the userspace pipeline cost measured above.
+
+### 6.4 Outliers
+
+| Span | alltime_max | Interpretation |
+|---|---|---|
+| `internal_us` | 67,973 µs (≈ 68 ms) | One occurrence, very early in the session (first BLE packet at n=1). Consistent with interpreter warmup, async-loop first-iteration cost, or initial GC. Not repeated in steady state. |
+| `cgevent_us` | 11,338 µs (≈ 11 ms) | Same pattern — single early occurrence. Likely WindowServer or HID event-tap initialization the first time we POST through the path. |
+
+Steady-state `max1s` (the per-second worst-case during normal use) never exceeded **704 µs** for `cgevent_us` or **185 µs** for `internal_us` across 5+ minutes of recording. p95 across the whole session remained ≤ 128 µs. The single-event maxes are interpreter/OS startup artifacts, not pathology.
+
+### 6.5 Conclusion
+
+The Joyglide userspace pipeline contributes **~0.37 % of the end-to-end latency budget at p50** (110 µs / 30,000 µs) and **~0.54 % at p95** (163 µs / 30,000 µs) under macOS BLE LL constraints. The 30 ms Apple QA1931 cap accounts for >99 % of the budget; the Python parser + dispatch and the Quartz event-post together account for less than 1 %.
+
+This validates the architectural claim from §1: **the bottleneck is the BLE link-layer interval imposed by macOS for non-HID-over-GATT peripherals, not the Python / CGEvent pipeline.** Further optimization of the userspace code path would shave microseconds invisible to a user; meaningful end-to-end latency gains require addressing the BLE transport (Linux + BlueZ at 5 ms, external USB BT dongle bypassing the Apple stack, or HID-over-GATT firmware on the JC2 — none of which are software-only on macOS).
+
+### 6.6 Reproducing
+
+```bash
+# Enable trace
+python3 -c "
+import json, pathlib
+p = pathlib.Path.home() / 'Library/Application Support/joyglide/settings.json'
+d = json.loads(p.read_text())
+d['latency_trace'] = True
+p.write_text(json.dumps(d, indent=2))
+"
+
+# Run Joyglide directly (binary mode → stderr to terminal),
+# OR via .app (search Console.app for senderImagePath = Joyglide):
+~/joyglide/dist/Joyglide.app/Contents/MacOS/Joyglide 2>&1 | grep '⏱  latency'
+```
+
+Move the connected JC2 on a hard surface for 60 s+. Switch `profile` between `dynamic` and `gaming` via the UI's Performance tab to compare paths. Per-second log lines:
+
+```
+⏱  latency.cgevent_us  n=200 p50=74us p95=112us max1s=580us alltime_max=11338us
+⏱  latency.internal_us n=200 p50=36us p95=51us  max1s=92us  alltime_max=67973us profile=gaming
+```
+
+The `latency_trace` module is `~200` LOC at the project root (`latency_trace.py`); tests at `tests/test_latency_trace.py` (20 tests, ring-buffer aggregation + emission throttle + worst-frame context capture). The instrumentation is permanent observability infrastructure, not a debug branch — re-runnable any time by flipping the settings flag.

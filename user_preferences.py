@@ -89,6 +89,14 @@ DEFAULTS = {
     # cursor stepping when display refresh > BLE rate (always true).
     "motion_prediction_enabled": False,
 
+    # ── Latency tracing (developer / verification tool) ─────────────────
+    # Off by default — zero runtime cost when off (one bool check on the
+    # hot path). When on, latency_trace.py captures perf_counter_ns
+    # timestamps around CGEventPost and emits aggregated p50/p95/max
+    # per second via applog. Used to quantify the BLE → CGEventPost
+    # budget. See latency_trace.py module docstring.
+    "latency_trace": False,
+
     # ── Internal (managed by the app, not a user-facing setting) ────────
     "devices": {}                     # address → {"type": "left"/"right"} memory
 }

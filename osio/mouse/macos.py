@@ -29,6 +29,7 @@ from Quartz import CoreGraphics as CG
 import subprocess
 from user_preferences import settings
 from applog import get_logger
+import latency_trace
 
 log = get_logger(__name__)
 
@@ -140,7 +141,16 @@ def _post(event_type, pos, button=CG.kCGMouseButtonLeft, click_count=1):
     macOS 14: ZR was firing the RightMouseDown event but Finder /
     browsers weren't bringing up the context menu. Setting the field
     unconditionally fixed it.
+
+    Optional latency instrumentation (``settings["latency_trace"]``):
+    when on, ``time.perf_counter_ns()`` is taken just before and just
+    after ``CGEventPost`` and ``latency_trace.record`` is called with
+    the two derived spans. Off by default — the one ``settings.get``
+    check is the only hot-path cost when off.
     """
+    trace = settings.get("latency_trace", False)
+    t1 = time.perf_counter_ns() if trace else 0
+
     ev = CG.CGEventCreateMouseEvent(None, event_type, pos, button)
     # Down/Up events get the click state. Move/Drag/Scroll events
     # don't — setting it on those is a no-op but skipping it keeps
@@ -150,6 +160,24 @@ def _post(event_type, pos, button=CG.kCGMouseButtonLeft, click_count=1):
                       CG.kCGEventOtherMouseDown, CG.kCGEventOtherMouseUp):
         CG.CGEventSetIntegerValueField(ev, CG.kCGMouseEventClickState, max(1, click_count))
     CG.CGEventPost(CG.kCGHIDEventTap, ev)
+
+    if trace:
+        t2 = time.perf_counter_ns()
+        latency_trace.record("cgevent_us", t2 - t1)
+        # Synchronous Gaming-profile path only: t0 was set by
+        # solo_logic.handle_single_notification, parser/mouse_optical
+        # is calling _post within the same call stack, so the
+        # contextvar is still visible. In Dynamic/Cinematic the pump
+        # task is a separate coroutine and the contextvar default 0
+        # makes this branch a no-op (we don't have an honest t0 there).
+        t0 = latency_trace.bleak_callback_start_ns.get()
+        if t0:
+            ctx = {"profile": settings.get("profile", "dynamic")}
+            latency_trace.record("internal_us", t1 - t0, ctx)
+            # Reset so a downstream _post call from the same callback
+            # (e.g. mouse_move immediately followed by mouse_down)
+            # doesn't double-count an earlier t0.
+            latency_trace.bleak_callback_start_ns.set(0)
 
 
 def _post_cmd_key(keycode):
