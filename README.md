@@ -1,20 +1,38 @@
 # Joyglide
 
+[![Build](https://github.com/opsthomaz/joyglide/actions/workflows/build.yml/badge.svg)](https://github.com/opsthomaz/joyglide/actions/workflows/build.yml)
+[![Lint + Test](https://github.com/opsthomaz/joyglide/actions/workflows/lint.yml/badge.svg)](https://github.com/opsthomaz/joyglide/actions/workflows/lint.yml)
+[![CodeQL](https://github.com/opsthomaz/joyglide/actions/workflows/codeql.yml/badge.svg)](https://github.com/opsthomaz/joyglide/actions/workflows/codeql.yml)
+[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](pyproject.toml)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL%203.0%20or%20later-blue.svg)](LICENSE)
+
 > Use a Nintendo Switch 2 Joy-Con as a desktop mouse on macOS and Windows.
 
 The Joy-Con 2 has an optical sensor on the bottom, just like a regular mouse. This app pairs it over Bluetooth Low Energy and turns the cursor movement into a real macOS / Windows mouse — sub-pixel motion, click on `L`/`R` (left) and `ZL`/`ZR` (right), scroll on the analog stick, battery readout, the works.
 
+```mermaid
+flowchart LR
+    JC2["Joy-Con 2<br/>(optical sensor)"] -->|BLE @ 30ms| bleak
+    bleak -->|notify| parser
+    parser -->|delta + accel| engine[engine / pump]
+    engine -->|sub-pixel| osio["osio<br/>(Quartz / Win32 / uinput)"]
+    osio -->|HID injection| cursor["your cursor"]
 ```
-┌─────────────────────────────────────────┐
-│  Joy-Con 2  ──BLE──▶  bleak  ──▶  pump  │
-│                                    │    │
-│                                    ▼    │
-│                          Quartz / Win32 │
-│                                    │    │
-│                                    ▼    │
-│                              your cursor│
-└─────────────────────────────────────────┘
-```
+
+---
+
+## Table of contents
+
+- [Quick start](#quick-start)
+- [Features](#features)
+- [Performance](#performance)
+- [How we verify](#how-we-verify)
+- [Compatibility](#compatibility)
+- [Project layout](#project-layout)
+- [Documentation](#documentation)
+- [Credits](#credits)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
@@ -22,14 +40,14 @@ The Joy-Con 2 has an optical sensor on the bottom, just like a regular mouse. Th
 
 ### macOS
 
-Pre-built `.app` bundle: download `Joyglide-macos.zip` from the [latest release](../../releases) (built automatically on every tag).
+Pre-built `.app` bundle (`Joyglide-macos.zip`) is published on the [Releases page](../../releases) starting with the v0.1.0 tag. Built automatically by CI on every tag.
 
 To build from source:
 
 ```bash
 git clone https://github.com/opsthomaz/joyglide.git
 cd joyglide
-python3.14 -m venv .venv          # 3.13 also fine
+python3.13 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python main.py
@@ -39,18 +57,18 @@ First launch will ask for **Accessibility** permission (System Settings → Priv
 
 ### Windows
 
-Pre-built `.exe`: download `Joyglide.exe` from the [latest release](../../releases).
+Pre-built `.exe` (`Joyglide.exe`) is published on the [Releases page](../../releases) starting with the v0.1.0 tag.
 
 To build from source — see [`docs/WINDOWS.md`](docs/WINDOWS.md) for the full guide. TL;DR:
 
 ```powershell
-py -3.14 -m venv .venv-win        # 3.13 also fine
+py -3.13 -m venv .venv-win
 .\.venv-win\Scripts\Activate.ps1
 pip install -r requirements.txt
 python main.py
 ```
 
-> Requires Python **3.13 or newer**. All BLE / UI deps now ship native wheels for both 3.13 and 3.14.
+> Requires Python **3.13 or newer**. All BLE / UI deps ship native wheels for 3.13 and 3.14.
 
 ### How to connect a Joy-Con
 
@@ -71,7 +89,7 @@ python main.py
 - **Sub-pixel cursor motion** (Quartz on macOS native; software-accumulated on Windows).
 - **Per-profile idle brake** so each profile has its own "stop" character.
 - **Adaptive drain factor** — the pump's drain ratio auto-adjusts to whatever BLE rate the OS negotiated (33 Hz on macOS, ~67 Hz on Windows). Same code, no toggles.
-- **Battery indicator** parsed live from input report `0x05` (offsets `0x1F`/`0x21` per ndeadly's research).
+- **Battery indicator** parsed live from input report `0x05` (offsets per ndeadly's research; current-scale `raw / 100 = mA` cross-validated against TropicalCyclone's driver + an 818 s hardware capture — pinned Tier S).
 - **Global pause hotkey** — `Ctrl+Alt+M` (Win) / `⌃⌥M` (Mac) freezes input without disconnecting. Resume is instant.
 - **Multiple controllers** — pair as many Joy-Cons as you want; each gets its own row in the dashboard with battery, side toggle, and disconnect button.
 - **Switch left ↔ right** at runtime without disconnecting (re-maps button masks in place).
@@ -95,7 +113,25 @@ python main.py
 
 We hit a hard ceiling on macOS that can't be moved in pure software (Apple enforces ≥30 ms LL interval for non-HID-over-GATT BLE peripherals). See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/RESEARCH.md`](docs/RESEARCH.md) for the full investigation, including a write-up of every workaround we tested and why each one fails.
 
+**Userspace overhead (measured, not estimated):** the Joyglide pipeline from BLE notification callback to `CGEventPost` return runs at **p50 ~110 µs / p95 ~163 µs** at steady state on Apple Silicon — under 1% of the 30 ms BLE LL interval budget. Methodology + full results + reproduction recipe in [`docs/RESEARCH.md` §6](docs/RESEARCH.md). Re-runnable any time via the built-in `latency_trace` instrumentation (off by default, zero cost when off).
+
 Linux (BlueZ) can in principle reach **5 ms / 200 Hz** — the same rate the Switch console itself uses. **Linux support is experimental** in this v0.1.0 release: the backends are present (`osio/mouse/linux.py` via uinput, `osio/hotkey/linux.py` via evdev, `osio/boost.py` via `hcitool lecup`) but have not been hardware-verified yet. Confirmation reports from Linux users are welcome.
+
+---
+
+## How we verify
+
+Joyglide treats the BLE / HID pipeline as a verifiable system, not a "works on my machine" hack. Five distinct mechanisms enforce that:
+
+| Mechanism | What it catches | Where |
+|---|---|---|
+| **200+ tests** (pytest + Hypothesis property tests) | Per-parser shape + exact-value regressions, denormal handling, wraparound math | `tests/` (5 hard CI gates listed below) |
+| **Cosmic-ray mutation testing** | Tests that *execute* lines but don't actually *assert* the semantics. `parser/battery.py` sits at **93% killable mutation score** with the surviving ~7% all documented equivalents (CPython interning artifacts, intentionally tolerant rounding, logging-only branches) | `tests/test_battery.py` docstring + `./packaging/run_cosmic_ray.sh parser/<module>.py` |
+| **Tier-rated protocol claims** (S/A/B/C/D/F) | "Just a comment" facts about the BLE protocol drifting from what hardware actually does | Per-claim citations in `parser/`, `ble/`; rule in `CLAUDE.md` §5 |
+| **Import-linter contracts (5)** | Architectural layering violations — `parser/` can't reach `ui/`, `osio/` is leaf, etc. | `.importlinter`, hard-fail in CI |
+| **Latency instrumentation** | Performance claims drifting from reality. The "<1% of BLE budget" claim in the Performance section above is *measured*, not estimated | `latency_trace.py` + `docs/RESEARCH.md` §6 |
+
+The 5 hard CI gates ("Passes" per `CLAUDE.md` §5): 150+ tests green · `ruff check` clean · `pyright` 0 errors/0 warnings · `lint-imports` 5/5 contracts · `xenon` complexity under cap (max C / avg A).
 
 ---
 
@@ -152,11 +188,10 @@ Bluetooth: requires a BLE 4.0+ adapter — built into essentially every laptop m
 
 ## Project layout
 
-The codebase is organized in a layered package structure (the modular
-blueprint refactor of v0.3.0/v0.4.0). Each layer has a single responsibility
-and depends only on the layers below it — enforced by import-linter
-contracts in CI. Adding a new OS or feature is a localized change, not a
-rewrite.
+The codebase is organized in a layered package structure. Each layer has
+a single responsibility and depends only on the layers below it —
+enforced by import-linter contracts in CI. Adding a new OS or feature
+is a localized change, not a rewrite.
 
 ```
 main.py                  entry point: BLE lifecycle orchestration + __main__
@@ -240,10 +275,12 @@ tests/                   pytest unit + property + mutation tests
 ## Documentation
 
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — GATT profile, input report layouts, command catalog, motion pipeline diagram, latency budget, threading model.
-- **[docs/RESEARCH.md](docs/RESEARCH.md)** — the 33 Hz wall, the "Set Report Rate?" descriptor experiment, cross-OS comparison with measured numbers.
+- **[docs/RESEARCH.md](docs/RESEARCH.md)** — the 33 Hz wall, the "Set Report Rate?" descriptor experiment, cross-OS comparison with measured numbers, **§6 empirical latency-budget measurement (Tier S)**.
 - **[docs/WINDOWS.md](docs/WINDOWS.md)** — Windows build, settings recommendations (turn off "Enhance pointer precision"), known limitations.
 - **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** — common issues with documented fixes.
 - **[docs/ROADMAP.md](docs/ROADMAP.md)** — planned features and contribution opportunities.
+- **[CHANGELOG.md](CHANGELOG.md)** — version-by-version release notes.
+- **[CLAUDE.md](CLAUDE.md)** — engineering rules + verification standards.
 - **[.github/CONTRIBUTING.md](.github/CONTRIBUTING.md)** — dev env setup + PR workflow.
 - **[.github/SECURITY.md](.github/SECURITY.md)** — vulnerability disclosure policy.
 
@@ -253,7 +290,7 @@ tests/                   pytest unit + property + mutation tests
 
 This project stands on the shoulders of a lot of reverse-engineering work. In rough order of how much they unblocked:
 
-- **[moutella/joycon2mouse](https://github.com/moutella/joycon2mouse)** — the original macOS app this fork extends. Without their tray-icon scaffolding, settings persistence, GATT enable-mode dance, and pump prototype, none of this would exist. ❤️
+- **[moutella/joycon2mouse](https://github.com/moutella/joycon2mouse)** — the original macOS app Joyglide descends from. Without their tray-icon scaffolding, settings persistence, GATT enable-mode dance, and pump prototype, none of this would exist. ❤️
 - **[TheFrano/joycon2py](https://github.com/TheFrano/joycon2py/)** — the *original* Python port that started this lineage.
 - **[ndeadly/switch2_controller_research](https://github.com/ndeadly/switch2_controller_research)** — the gold standard reference for the Joy-Con 2 BLE protocol, command IDs, memory layout, and HID report formats. The battery offsets, the `679d5510` "Set Report Rate?" descriptor, and the input-report structures are all from there.
 - **[TheFrano/joycon2cpp](https://github.com/TheFrano/joycon2cpp)** — independent C++ Windows implementation. Validated the `BluetoothLEPreferredConnectionParameters.ThroughputOptimized` approach we use in `osio/boost.py`.
@@ -268,7 +305,7 @@ If you're picking up this codebase for further work, **also clone ndeadly's repo
 
 ## Contributing
 
-PRs welcome — and **especially welcome if you want to extend compatibility to platforms or hardware we don't currently support**. The codebase is small (~2500 lines of Python), well-commented, and laid out so platform backends slot in cleanly via `sys.platform` dispatchers — adding a new OS is a localized change, not a rewrite.
+PRs welcome — and **especially welcome if you want to extend compatibility to platforms or hardware we don't currently support**. The codebase is ~6,000 lines of production Python (plus ~3,200 lines of tests), well-commented, and laid out so platform backends slot in cleanly via `sys.platform` dispatchers — adding a new OS is a localized change, not a rewrite.
 
 ### High-impact contribution ideas
 
@@ -294,7 +331,7 @@ PRs welcome — and **especially welcome if you want to extend compatibility to 
    git clone git@github.com:your-username/joyglide.git
    cd joyglide
    git checkout -b feature/your-thing
-   python3.14 -m venv .venv && source .venv/bin/activate   # 3.13 also fine
+   python3.13 -m venv .venv && source .venv/bin/activate
    pip install -r requirements.txt
    python main.py    # iterate
    ```
