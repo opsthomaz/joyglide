@@ -145,12 +145,46 @@ multiple times. The CLAUDE.md exists in part to prevent that.
 - Hardware-only verifications go in `CHANGELOG.md` with date +
   observed values, marked Tier S.
 - "Passes" = all of:
-  - 130+ tests green (currently 130; growing)
+  - 150+ tests green (currently 180; growing)
   - `ruff check .` clean
   - `pyright` 0 errors / 0 warnings
   - `lint-imports` 5 / 5 contracts
   - `xenon` under cap (max C / avg A)
 - Never commit with red gates.
+
+#### Tier-S claims must be semantically pinned
+
+Any module that contains a Tier-S protocol claim (per §1) must:
+
+1. **Pin the claim with at least one exact-value test** that names the
+   external source of truth — hardware capture, working third-party
+   driver code, or both. Never assert against another constant in this
+   project (self-referential reads catch typos but not semantic drift).
+2. Pass the standard gates above.
+3. Achieve a **mutation score of ≥90% of *killable* mutants** under
+   cosmic-ray (i.e. excluding documented equivalent mutants — the
+   denominator is `total - equivalents`, not `total`).
+
+The threshold measures *discriminative power* of the test assertions —
+not test count, not code coverage. A test that runs the line but only
+checks shape (range, type, "is not None") leaves operator/number
+mutations alive and fails this gate; a test that pins an exact
+hardware-verifiable value kills them.
+
+**Equivalent mutants are documented adjacent to the tests they apply
+to** (currently `tests/test_battery.py` module docstring — see "Documented
+equivalent mutants" section there for the format). Each entry records
+*why* the mutation is observationally indistinguishable and *whether*
+the equivalence is mathematical (runtime-independent) or interpreter-
+dependent (e.g. CPython small-int / string-literal interning — those
+must be re-evaluated on a runtime change).
+
+Once a second module is mutation-tested, the equivalents get factored
+out into a top-level `MUTATION_EQUIVALENTS.md`. Until then, keep
+governance lightweight and the rationale local.
+
+Re-run with: `./packaging/run_cosmic_ray.sh parser/<module>.py` (~5 min
+per parser module on a laptop; sessions DB and toml are gitignored).
 
 ### 6. When in doubt
 

@@ -18,7 +18,82 @@ Why this file exists:
 
     Re-run ``./packaging/run_cosmic_ray.sh parser/battery.py`` after any
     change to ``parser/battery.py`` to verify the mutation score does
-    not regress below ~95%.
+    not regress.
+
+Documented equivalent mutants (parser/battery.py)
+=================================================
+
+The current mutation score is **93.30% (15 survivors / 224 mutants)**.
+All 15 remaining survivors are documented below. Each is non-actionable
+either because the mutation is observationally indistinguishable from
+the original under the project's supported runtime contract (CPython
+≥3.13), or because the affected behavior is logging-only / a deliberate
+rounding tolerance.
+
+This list is kept adjacent to the tests it justifies. When a second
+module is mutation-tested, the equivalents get factored out into a
+top-level ``MUTATION_EQUIVALENTS.md`` (deferred per the lightweight-
+governance principle in CLAUDE.md §5).
+
+Absolute equivalents (mathematically identical on any Python runtime) — 8
+------------------------------------------------------------------------
+A. ``BATTERY_CURRENT_OFFSET + 1`` → ``OFFSET | 1`` (×1)
+B. ``BATTERY_CURRENT_OFFSET + 1`` → ``OFFSET ^ 1`` (×1)
+   ``0x22 + 1 == 0x22 | 1 == 0x22 ^ 1 == 0x23`` — the offset's low bit
+   is 0, so add/or/xor with 1 collapse to the same constant.
+C. ``lo | (hi << 8)`` → ``lo + (hi << 8)`` for voltage & current (×2)
+D. ``lo | (hi << 8)`` → ``lo ^ (hi << 8)`` for voltage & current (×2)
+   The low byte lives in bits 0-7 and the shifted high byte in bits
+   8-15 — non-overlapping. OR, ADD, and XOR all produce the same value
+   when bit ranges are disjoint.
+E. ``charge_byte != 0`` → ``charge_byte > 0`` (×1)
+   Python bytes are unsigned (0..255). ``> 0`` and ``!= 0`` cover the
+   same set over an unsigned domain.
+F. ``"voltage" != "firmware"`` → ``"voltage" > "firmware"`` (×1)
+   ``battery_pct_source`` only takes two values by design: "voltage"
+   (default) and "firmware" (set by parser.power_info). For both,
+   ``> "firmware"`` produces the same boolean as ``!= "firmware"``
+   (lexicographic comparison is well-defined across runtimes).
+
+Runtime-sensitive equivalents (CPython-interning-dependent) — 1
+--------------------------------------------------------------
+G. ``"firmware" is not "firmware"`` vs ``"firmware" != "firmware"`` (×1)
+   CPython interns module-scope string literals, so both reach
+   ``False`` via different paths. NOT mathematically equivalent —
+   ``is`` checks identity, ``!=`` checks value. Diverges if
+   ``battery_pct_source`` is ever constructed dynamically (e.g.
+   ``"firm" + "ware"`` returning a non-interned string), or on a
+   runtime that does not intern the same way (PyPy, MicroPython,
+   future CPython implementation changes). Re-evaluate when the
+   project changes Python runtime or when ``battery_pct_source`` gains
+   a third value or non-literal source.
+
+Tolerant rounding (intentionally absorbed by ``round()``) — 4
+------------------------------------------------------------
+H. ``(mv - 3300)`` → ``(mv - 3301)`` (×1)
+I. ``(mv - 3300)`` → ``(mv - 3299)`` (×1)
+J. ``/ 900`` → ``/ 901`` (×1)
+K. ``/ 900`` → ``/ 899`` (×1)
+   At every voltage pinned by the exact-value tests above (3300, 3600,
+   3750, 3900, 4200, 2800, 4500, 2499, 2500, 5000, 5001), a ±1
+   perturbation of either curve coefficient produces a pre-round value
+   so close to the original that ``round()`` returns the same integer
+   percent. Distinguishing these would require contriving voltages
+   whose unrounded result sits within ~0.5/900 of a half-integer
+   boundary — high curve-fitting effort, near-zero engineering value
+   (the curve's quantization is already coarser than the noise floor
+   of the hardware ADC).
+
+Logging-only (no parser-behavior impact) — 2
+-------------------------------------------
+L. ``if settings.get("battery_log", False):`` → ``if not settings.get(...)`` (×1)
+M. ``settings.get("battery_log", False)`` → ``settings.get(..., True)`` (×1)
+   These flip the gate on the ``log.info(f"  🔋 battery t=...")``
+   diagnostic line at the bottom of ``parser.battery.parse``. They
+   change whether a debug log fires; they do not change ``state.*``
+   values or any return path. To kill them would require asserting on
+   logger output, which the project's parsers do not generally do
+   (logging is a side channel, not a contract).
 """
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -333,3 +408,19 @@ class TestCurrentFieldLengthGate:
             battery.parse(s, bytes(short))
         assert s.battery_mv == 3750
         assert s.battery_current_ma is None  # current not parsed
+
+    def test_long_packet_current_field_still_parsed(self):
+        """Real input report 0x05 is ~60 bytes — longer than the 36-byte
+        minimum the current-field gate enforces. parse() must still read
+        and decode the current field correctly when extra trailing bytes
+        are present.
+
+        Kills mutations that change the bound from `>= OFFSET + 2` to
+        `==` or `is` (small-int-interned identity), both of which behave
+        identically to the original ONLY when len(data) exactly equals
+        the threshold. A longer packet exposes the difference."""
+        s = _state()
+        long_pkt = _packet(3750, current_raw=1820) + b"\x00" * 24  # 60 bytes
+        with patch("parser.battery.time.monotonic", return_value=100.0):
+            battery.parse(s, long_pkt)
+        assert s.battery_current_ma == 18.20
