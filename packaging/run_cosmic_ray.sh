@@ -54,6 +54,11 @@ case "$TARGET" in
     *)             TESTS="tests/" ;;
 esac
 
+# Flatten TESTS — case blocks use multi-line strings for readability, but
+# TOML basic strings (double-quoted) can't contain unescaped newlines, so
+# the embedded newlines need to become single spaces before substitution.
+TESTS_FLAT="${TESTS//$'\n'/ }"
+
 # Write a per-run config to /tmp so the committed cosmic-ray.toml is never
 # overwritten (dirty working tree surprise on every run).
 CR_TOML="/tmp/cosmic-ray-session.toml"
@@ -62,7 +67,7 @@ cat > "$CR_TOML" <<EOF
 module-path = "$TARGET"
 timeout = 10.0
 excluded-modules = []
-test-command = ".venv/bin/python -m pytest -x -q $TESTS"
+test-command = ".venv/bin/python -m pytest -x -q $TESTS_FLAT"
 
 [cosmic-ray.distributor]
 name = "local"
