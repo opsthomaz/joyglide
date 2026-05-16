@@ -29,6 +29,9 @@ and turns its optical sensor into a native desktop mouse.
   click; rapid press within 400ms triggers double-click.
 - **Analog-stick scroll** — cubic curve in Dynamic/Cinematic, linear
   in Gaming.
+- **Adaptive BLE-rate drain** — pump auto-adjusts to whatever rate
+  the OS negotiated (~33 Hz macOS, ~67 Hz Windows). Same code, no
+  toggles.
 - **Live battery readout** parsed from input report `0x05`.
 - **Global pause hotkey** — `Ctrl+Alt+M` (Windows) / `⌃⌥M` (macOS)
   freezes input without disconnecting.

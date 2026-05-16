@@ -152,21 +152,6 @@ def _post(event_type, pos, button=CG.kCGMouseButtonLeft, click_count=1):
     CG.CGEventPost(CG.kCGHIDEventTap, ev)
 
 
-def _post_other(event_type, pos, button_number):
-    """Post an "other" mouse event (button index 3+: back, forward, …).
-
-    Quartz routes these via ``kCGEventOtherMouseDown / Up`` and uses the
-    ``kCGMouseEventButtonNumber`` integer field to select which extra
-    button. Note: macOS 13+ grabs button index 3 for Mission Control
-    by default, so we don't actually use this helper for back/forward
-    on macOS — see ``mouse_down_back`` / ``_post_cmd_key`` for the
-    keystroke route. Kept for any future "extra button" use case.
-    """
-    ev = CG.CGEventCreateMouseEvent(None, event_type, pos, button_number)
-    CG.CGEventSetIntegerValueField(ev, CG.kCGMouseEventButtonNumber, button_number)
-    CG.CGEventPost(CG.kCGHIDEventTap, ev)
-
-
 def _post_cmd_key(keycode):
     """Synthesise an atomic ``Cmd + <keycode>`` keystroke (down + up).
 
@@ -295,7 +280,12 @@ class InputSimulator:
         self._sync_pos()
         self._left_down = True
 
-        now = time.time()
+        # ``time.monotonic`` (not ``time.time``) — wall-clock can step
+        # backwards on NTP adjustment, which would break the 400 ms
+        # double-click window (either by classifying a real double-click
+        # as a single, or by treating two clicks 10 s apart as one
+        # double on a -10 s NTP step).
+        now = time.monotonic()
         if settings.get("double_click_enabled", True) and now - self._last_click_time < 0.4:
             self._click_count = min(3, self._click_count + 1)
         else:

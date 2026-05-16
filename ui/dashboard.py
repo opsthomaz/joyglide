@@ -80,9 +80,9 @@ class DashboardMixin:
             return f"🔌 {gp.battery_pct}% (full){cur}"
         if gp.battery_charging:
             return f"⚡ {gp.battery_pct}% (charging){cur}"
-        if gp.battery_pct >= 80 or gp.battery_pct >= 40:   icon = "🔋"
-        elif gp.battery_pct >= 20: icon = "🪫"
-        else:                       icon = "🪫"
+        if   gp.battery_pct >= 60: icon = "🔋"   # high
+        elif gp.battery_pct >= 20: icon = "🪫"   # medium
+        else:                      icon = "🪫"   # low (no distinct critical-low emoji available)
         return f"{icon} {gp.battery_pct}%  ({gp.battery_mv} mV){cur}"
 
     def refresh_dashboard(self):

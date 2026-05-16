@@ -12,6 +12,7 @@ prompt fresh.
 import os
 import subprocess
 import sys
+import threading
 
 import customtkinter as ctk
 
@@ -45,8 +46,10 @@ def show(parent) -> None:
                   font=("Helvetica", 13)).pack(pady=4)
 
     def open_sys_settings():
-        subprocess.run(["open",
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"])
+        def _run():
+            subprocess.run(["open",
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"])
+        threading.Thread(target=_run, daemon=True, name="joyglide-open-sys-settings").start()
 
     ctk.CTkButton(warn_win, text="Open System Settings", fg_color="#3498db",
                    font=("Helvetica", 14, "bold"), height=40,
@@ -73,35 +76,40 @@ def show(parent) -> None:
         return None
 
     def reset_permission():
-        try:
-            subprocess.run(["tccutil", "reset", "Accessibility", BUNDLE_ID],
-                            check=True, capture_output=True, text=True)
-            log.info(f"🔄 Reset Accessibility permission for {BUNDLE_ID}")
-        except (subprocess.CalledProcessError, FileNotFoundError) as e:
-            log.warning(f"⚠️ tccutil reset failed: {e}")
-            ctk.CTkLabel(warn_win,
-                          text=f"Reset failed: {e}. Try running it from Terminal:\n"
-                               f"tccutil reset Accessibility {BUNDLE_ID}",
-                          font=("Helvetica", 11), text_color="#e74c3c",
-                          justify="center").pack(pady=4)
-            return
+        def _run():
+            try:
+                subprocess.run(["tccutil", "reset", "Accessibility", BUNDLE_ID],
+                                check=True, capture_output=True, text=True)
+                log.info(f"🔄 Reset Accessibility permission for {BUNDLE_ID}")
+            except (subprocess.CalledProcessError, FileNotFoundError) as e:
+                log.warning(f"⚠️ tccutil reset failed: {e}")
+                parent.after(0, lambda err=e: ctk.CTkLabel(
+                    warn_win,
+                    text=f"Reset failed: {err}. Try running it from Terminal:\n"
+                         f"tccutil reset Accessibility {BUNDLE_ID}",
+                    font=("Helvetica", 11), text_color="#e74c3c",
+                    justify="center").pack(pady=4))
+                return
 
-        # Relaunch via `open` if we're inside a .app bundle, otherwise
-        # just exit and let the user re-run. `open -n` forces a fresh
-        # process so the new instance gets a clean TCC prompt.
-        app_path = find_app_bundle_path()
-        if app_path:
-            subprocess.Popen(["open", "-n", app_path])
-        log.info("Quitting so the freshly-prompted instance can take over.")
-        parent.after(200, lambda: os._exit(0))
+            # Relaunch via `open` if we're inside a .app bundle, otherwise
+            # just exit and let the user re-run. `open -n` forces a fresh
+            # process so the new instance gets a clean TCC prompt.
+            app_path = find_app_bundle_path()
+            if app_path:
+                parent.after(0, lambda p=app_path: subprocess.Popen(["open", "-n", p]))
+            log.info("Quitting so the freshly-prompted instance can take over.")
+            parent.after(200, lambda: os._exit(0))
+
+        threading.Thread(target=_run, daemon=True, name="joyglide-reset-permission").start()
 
     ctk.CTkButton(warn_win, text="Reset Permission and Relaunch",
                    fg_color="#7f8c8d", hover_color="#566061",
                    font=("Helvetica", 12), height=32,
                    command=reset_permission).pack(pady=(4, 8))
 
-    ctk.CTkLabel(warn_win, text="Waiting for permission…",
-                  font=("Helvetica", 11, "italic"), text_color="gray").pack(pady=(8, 0))
+    poll_label = ctk.CTkLabel(warn_win, text="Waiting for permission…",
+                               font=("Helvetica", 11, "italic"), text_color="gray")
+    poll_label.pack(pady=(8, 0))
 
     poll_count = [0]
 
@@ -115,6 +123,12 @@ def show(parent) -> None:
         else:
             poll_count[0] += 1
             if poll_count[0] > 15:
+                poll_label.configure(
+                    text="Polling timed out. Please re-open this dialog if you've\n"
+                         "granted permission since.",
+                    text_color="#e67e22",
+                    font=("Helvetica", 11),
+                )
                 return
             delay = 1000 if poll_count[0] <= 5 else 3000
             parent.after(delay, poll_accessibility)

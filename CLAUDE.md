@@ -79,14 +79,15 @@ counterintuitive enough that AI tools have re-introduced them
 multiple times. The CLAUDE.md exists in part to prevent that.
 
 - **`write_command` sends EXACTLY `len(payload)` bytes — no padding.**
-  v0.6.0 fixed a long-standing bug where short payloads were
-  zero-padded to 8 bytes while the header reported `len=1`. The JC2
-  firmware silently rejected the malformed commands. The
-  "8-byte minimum" comment from moutella's original code was wrong.
-- **`FEATURE_MASK_DEFAULT = 0xFF` — do NOT trim.** v0.2.12 trimmed
-  to `0x33` (Button + Stick + Mouse + Rumble) on the theory it
-  saved controller-side battery; v0.6.0 reverted after hardware
-  testing proved the firmware silently rejected it. The
+  Earlier development fixed a long-standing bug where short payloads
+  were zero-extended up to an 8-byte minimum while the header still
+  reported `len=1`. The JC2 firmware silently rejected the malformed
+  commands. The "8-byte minimum" comment carried over from the
+  upstream codebase Joyglide descends from was wrong.
+- **`FEATURE_MASK_DEFAULT = 0xFF` — do NOT trim.** An earlier
+  development build trimmed to `0x33` (Button + Stick + Mouse + Rumble)
+  on the theory it saved controller-side battery; reverted after
+  hardware testing proved the firmware silently rejected it. The
   `coffincolors/jc2mouse` Linux driver uses `0xFF` and that's the
   empirically-validated path.
 - **Subscribing to two input-report characteristics simultaneously
@@ -100,7 +101,7 @@ multiple times. The CLAUDE.md exists in part to prevent that.
   - DO connect multiple JCs to the same host — each is independent.
   Command-response notify channels (`c765a961-…`, `640ca58e-…`)
   also coexist with input report 0x05 on the same peripheral
-  (v0.7.0 verified).
+  (hardware-verified).
 - **`start_notify` must be idempotent.** bleak raises
   `BleakError("Characteristic notifications already started")` on
   spurious reconnect callbacks (macOS BT stack quirk). See
@@ -116,18 +117,19 @@ multiple times. The CLAUDE.md exists in part to prevent that.
 - **macOS `kCGMouseEventClickState` must be set to ≥1 on Down/Up
   events**, not just Move. RightMouse and OtherMouse events
   specifically fail to register as context-menu-triggering clicks
-  without it (v0.7.0 fix).
+  without it (hardware-verified fix carried into v0.1.0).
 
 ### 4. Calibration constants (Tier S — hardware-verified)
 
 - IMU accel: `4096 raw counts = 1 G`
 - IMU gyro: `48000 raw counts = 360°`
 - IMU temperature: `°C = 25 + raw / 127`
-- IMU timestamp: **`1 MHz` (1 µs/tick)** — NOT 50 kHz as
-  github.com/german77/JoyconDriver#1 states. We measured Δts=30000
-  across 30ms BLE packets which equals 1 MHz, not 50 kHz. Possibly
-  the issue's comment refers to USB or a different revision; the
-  BLE-on-macOS verified value is 1 MHz.
+- IMU timestamp: **`1 MHz` (1 µs/tick)** — NOT the lower-rate
+  `50,000-tick = 1-second` value cited by
+  github.com/german77/JoyconDriver#1. We measured Δts=30000 across
+  30ms BLE packets which equals 1 MHz, not the lower figure.
+  Possibly the issue's comment refers to USB or a different
+  revision; the BLE-on-macOS verified value is 1 MHz.
 - Battery current: **`raw u16 / 100 = mA`** (TropicalCyclone driver
   + our 818-s capture both confirm: raw 1820 → 18.2 mA matches the
   525 mAh / 20-h spec).

@@ -86,8 +86,13 @@ class JoyCon:
         self.battery_pct_source: str = "voltage"  # "voltage" or "firmware"
         self._power_info_last_ts = 0.0
         # IMU state — populated by parser.imu when ``settings["imu_enabled"]``
-        # is on. Calibration scales (4096 g, 48000 deg, 50kHz timestamp) are
-        # firmware-defined and confirmed in github.com/german77/JoyconDriver#1.
+        # is on. Calibration scales (4096 raw = 1 G accel, 48000 raw = 360°
+        # gyro, 25 + raw/127 °C temperature) are firmware-defined and
+        # confirmed in github.com/german77/JoyconDriver#1. Timestamp scale
+        # is 1 MHz (1 µs/tick) — Tier S, hardware-verified on a JC2 (R) over
+        # BLE on macOS (Δts ≈ 30000 per ~30 ms BLE packet = 1 MHz, not the
+        # 50 kHz value cited in german77 issue #1 which likely refers to USB
+        # or a different firmware revision).
         self.imu_timestamp:   int | None              = None
         self.imu_temperature: int | None              = None
         self.imu_temperature_c: float | None          = None

@@ -53,23 +53,19 @@ jobs:
       # ─── Ruff: bugs + style (replaces flake8 + isort + pyupgrade) ──────
       - name: Ruff
         run: ruff check . --output-format=github
-        continue-on-error: true
 
       # ─── mypy: gradual type checker (config in pyproject.toml) ─────────
       - name: mypy
         run: mypy . --no-error-summary
-        continue-on-error: true
 
       # ─── pyright: stricter, faster type checker (Microsoft) ────────────
       # Catches things mypy misses and vice versa. Same config (pyproject.toml).
       - name: pyright
-        run: pyright --outputjson > pyright-report.json || true
-        continue-on-error: true
+        run: pyright
 
       # ─── bandit: security-focused linter ───────────────────────────────
       - name: Bandit
         run: bandit -c pyproject.toml -r . -ll
-        continue-on-error: true
 
       # ─── vulture: dead-code detector ───────────────────────────────────
       - name: Vulture

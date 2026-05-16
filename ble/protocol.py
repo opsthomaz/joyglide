@@ -27,8 +27,7 @@ from ble.constants import (
     SUBCOMMAND_SET_PLAYER_LEDS,
     WRITE_COMMAND_UUID,
 )
-from ble.feature_flags import FEATURE_IMU, FEATURE_MASK_DEFAULT
-from user_preferences import settings
+from ble.feature_flags import FEATURE_MASK_DEFAULT
 
 log = get_logger(__name__)
 
@@ -176,7 +175,9 @@ async def enable_mouse(client) -> None:
     path. We follow.
 
     The IMU bit (0x04) is present in 0xFF, so our default mask already
-    enables IMU. The ``settings["imu_enabled"]`` setting separately
+    enables IMU — no per-setting OR needed (the previous
+    ``if imu_enabled: mask |= FEATURE_IMU`` was a no-op since the bit was
+    already set). The ``settings["imu_enabled"]`` setting separately
     controls whether parser/imu.py *parses* the bytes — the controller
     streams them either way under 0xFF.
 
@@ -186,8 +187,6 @@ async def enable_mouse(client) -> None:
     1 MHz (not 50 kHz) via hardware verification — see parser/imu.py.
     """
     mask = FEATURE_MASK_DEFAULT
-    if settings.get("imu_enabled", False):
-        mask |= FEATURE_IMU
     payload = bytes([mask, 0x00, 0x00, 0x00])
     await write_command(client, COMMAND_FEATURE_SELECT, SUBCOMMAND_SET_FEATURE_MASK, payload)
     await asyncio.sleep(0.5)

@@ -26,6 +26,7 @@ from Quartz import (
     kCGEventFlagMaskControl,
     kCGEventFlagMaskShift,
     kCGHeadInsertEventTap,
+    kCGKeyboardEventAutorepeat,
     kCGKeyboardEventKeycode,
     kCGSessionEventTap,
     kCGEventTapOptionListenOnly,
@@ -42,6 +43,13 @@ def install_pause_hotkey(callback) -> None:
     """Spawns a daemon thread that calls ``callback()`` on ⌃⌥M keydown."""
 
     def tap_callback(_proxy, _type, event, _refcon):
+        # Drop auto-repeat events. macOS fires keyDown repeatedly while
+        # ⌃⌥M is held — without this gate, a 500 ms hold would toggle
+        # pause dozens of times. ``kCGKeyboardEventAutorepeat`` is the
+        # integer field that's non-zero on repeats and zero on the
+        # initial press.
+        if CGEventGetIntegerValueField(event, kCGKeyboardEventAutorepeat) != 0:
+            return event
         keycode = CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode)
         if keycode != _KEY_M:
             return event

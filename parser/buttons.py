@@ -6,9 +6,10 @@ packet, and emits mouse_down / mouse_up via the state's InputSimulator
 when the L/R or ZL/ZR buttons transition. Other button transitions
 are logged at DEBUG level only.
 """
-import logging
-
+from applog import get_logger
 from parser.button_masks import MASKS
+
+log = get_logger(__name__)
 
 
 # Button-name → (press method, release method) on the InputSimulator.
@@ -56,6 +57,13 @@ def parse(state, data: bytes) -> None:
 
     button_map  = MASKS[state.side]
     offset      = 4 if state.is_left else 3
+    # Runt-packet guard — without this, ``data[offset:offset + 3]`` would
+    # silently return a short slice and ``int.from_bytes`` would decode it
+    # as a smaller magnitude, producing a spurious bitmask diff that
+    # synthesises phantom press/release events. Matches the bounds-check
+    # style in ``parser/battery.py``.
+    if len(data) < offset + 3:
+        return
     cur_state   = int.from_bytes(data[offset:offset + 3], 'big')
     last_state  = int.from_bytes(state.last_data[offset:offset + 3], 'big') if state.last_data else 0
     state.last_data = data
@@ -74,4 +82,4 @@ def parse(state, data: bytes) -> None:
         if methods is not None:
             getattr(sim, methods[0] if pressed else methods[1])()
         elif not pressed:
-            logging.debug(name)
+            log.debug(name)

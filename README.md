@@ -95,7 +95,7 @@ python main.py
 
 We hit a hard ceiling on macOS that can't be moved in pure software (Apple enforces ≥30 ms LL interval for non-HID-over-GATT BLE peripherals). See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/RESEARCH.md`](docs/RESEARCH.md) for the full investigation, including a write-up of every workaround we tested and why each one fails.
 
-Linux (BlueZ) can in principle reach **5 ms / 200 Hz** — the same rate the Switch console itself uses. A Linux port is not implemented in this repo but is straightforward (BlueZ exposes connection parameters via HCI; the rest of the codebase is platform-agnostic).
+Linux (BlueZ) can in principle reach **5 ms / 200 Hz** — the same rate the Switch console itself uses. **Linux support is experimental** in this v0.1.0 release: the backends are present (`osio/mouse/linux.py` via uinput, `osio/hotkey/linux.py` via evdev, `osio/boost.py` via `hcitool lecup`) but have not been hardware-verified yet. Confirmation reports from Linux users are welcome.
 
 ---
 
@@ -129,9 +129,14 @@ The pre-built `.exe` is **x86_64**.
 
 Bluetooth: requires a BLE 4.0+ adapter — built into essentially every laptop made since 2014 and any USB BT 4.0 dongle works on desktops.
 
+### Linux (experimental)
+
+| Distro | Status | Notes |
+|---|---|---|
+| Any modern Linux + BlueZ + evdev/uinput | ⚠️ Experimental | Backends present (`osio/mouse/linux.py`, `osio/hotkey/linux.py`, `osio/boost.py` Linux branch via `hcitool lecup`) but **not hardware-verified at v0.1.0**. With BlueZ, 5 ms / 200 Hz is in principle reachable — the same rate the Switch console uses. Confirmation reports welcome. |
+
 ### What's not yet supported
 
-- **Linux** — the cross-platform abstraction is in place via the `osio/` package (`osio/mouse/`, `osio/hotkey/`, `osio/boost.py` all dispatch by `sys.platform`), so a Linux port mostly means dropping in `osio/mouse/linux.py` (X11 XInput or Wayland evdev), `osio/hotkey/linux.py`, and a Linux branch in `osio/boost.py`. **On Linux, BlueZ would let us hit 200 Hz natively** — the same rate the Switch console uses.
 - **Native universal2 macOS binary** (single .app for arm64 + x86_64 without Rosetta) — would require all dependency wheels installed with `--platform macosx_*_universal2`, which complicates the CI pipeline. Open to a contribution.
 - **Windows on ARM native** — the build currently produces x64 only. Windows handles x64 → ARM emulation reasonably, so it works, just not optimally.
 
@@ -178,18 +183,23 @@ parser/                  ─────── input report 0x05 decoders ──
   buttons.py             bitmask diff → click events
   mouse_optical.py       absolute X/Y → wrap-aware delta + accel curves
   sticks.py              12-bit packed stick → scroll accumulator
+  imu.py                 18-byte Motion Data block (timestamp + accel + gyro)
+  magnetometer.py        6-byte mag block at offset 0x19 (s16 X/Y/Z)
+  power_info.py          side-specific Power Info bitfield (0..9 SoC, charging)
 
 engine/                  ─────── motion engine + tuning ───────────────
   tuning.py              pump constants (idle brake, max delta, cutoff)
   motion_pump.py         async coroutine — drains accumulator @ display Hz
+  predictor.py           optical-velocity inter-packet prediction (opt-in)
 
 osio/                    ─────── OS-specific I/O dispatchers ──────────
   boost.py               priority + anti-throttle + BLE rate negotiation
-  mouse/                 cursor injection (macos.py = Quartz, windows.py = SendInput)
-  hotkey/                global pause hotkey (macos = CGEventTap, windows = RegisterHotKey)
+  mouse/                 cursor injection (macos.py = Quartz, windows.py = SendInput, linux.py = uinput)
+  hotkey/                global pause hotkey (macos = CGEventTap, windows = RegisterHotKey, linux = evdev)
 
 ui/                      ─────── customtkinter dashboard ──────────────
   __init__.py            JoyglideUI = MRO(Dashboard + Performance + Settings)
+  _shared.py             shared widget helpers + palette across mixins
   dashboard.py           DashboardMixin — controller list + battery
   performance.py         PerformanceMixin — profile + sliders
   settings_tab.py        SettingsMixin — toggles + reset
@@ -250,6 +260,7 @@ This project stands on the shoulders of a lot of reverse-engineering work. In ro
 - **[Misaka10571/joycon2-connector](https://github.com/Misaka10571/joycon2-connector)** — another C++ Windows implementation; their vibration sample IDs (`BUZZ`, `FIND`, `CONNECT`, `PAIRING`, `STRONG_THUNK`, `DUN`, `DING`) are documented and worth borrowing.
 - **[german77/JoyconDriver](https://github.com/german77/JoyconDriver)** — Wireshark dissector for Switch 2 controller traffic; critical for cross-checking pcap captures.
 - **[coffincolors/jc2mouse](https://github.com/coffincolors/jc2mouse)** — Linux userspace driver. Independent confirmation of the GATT UUIDs and enable sequence we use.
+- **[TropicalCyclone/switch2-controller-driver](https://github.com/TropicalCyclone/switch2-controller-driver)** — Python driver that independently arrived at the same input report 0x05 layout and, crucially, the same `raw / 100 = mA` scale for the battery current field at offset 0x22 — cross-validation that pinned that calibration to Tier S in our protocol catalog.
 
 If you're picking up this codebase for further work, **also clone ndeadly's repo into `research/`** for offline reference — it's gitignored from this repo for size reasons, but the docs link to specific files in it.
 
@@ -263,7 +274,7 @@ PRs welcome — and **especially welcome if you want to extend compatibility to 
 
 | Area | Difficulty | Why it matters |
 |---|---|---|
-| **Linux port** (`osio/mouse/linux.py` + `osio/hotkey/linux.py` + Linux branch in `osio/boost.py`) | Medium | Linux + BlueZ unlocks **200 Hz native** — the same rate the Switch console uses. Every other layer (`ble/`, `parser/`, `engine/`, `ui/`) just works once the OS dispatcher is wired. |
+| **Linux hardware verification** (Linux backends already shipped in `osio/mouse/linux.py`, `osio/hotkey/linux.py`, `osio/boost.py`) | Medium | The Linux code is present but **untested on hardware** at v0.1.0. Confirmation reports — and any necessary fixes — would graduate Linux from experimental to supported. Linux + BlueZ in principle unlocks **200 Hz native**, the same rate the Switch console uses. |
 | **macOS universal2 build** (Apple Silicon + Intel native, no Rosetta) | Easy | Configure CI to install dependency wheels with `--platform macosx_*_universal2` and add `target_arch='universal2'` in the spec. Would shrink Intel install friction to zero. |
 | **Windows ARM64 build** | Easy-Medium | Build PyInstaller on `windows-11-arm` runner; spec stays the same. Surface Pro X and Snapdragon X laptops would run native instead of via emulation. |
 | **IMU-based motion prediction** | Medium-Hard | Each BLE packet of input report 0x05 carries ONE 18-byte Motion Data sample at offset 0x2A (timestamp + temp + accel + gyro). Same rate as the optical sensor — so on input report 0x05 alone, IMU prediction can't reduce inter-packet latency. The ~6-samples-per-packet claim from earlier docs referenced input reports 0x07/0x08 which carry 40-byte multi-sample motion blocks but in "unknown packed format" per ndeadly. Real win requires reverse-engineering that format AND switching primary subscription from 0x05 to side-specific (which would lose IMU calibration we have, magnetometer at 0x19, and absolute mouse). |
@@ -327,6 +338,6 @@ The shipped binaries embed several third-party libraries. All are GPL-3.0-compat
 
 | Dependency | License | Compatibility note |
 |---|---|---|
-| `bleak`, `pillow`, `customtkinter`, `platformdirs`, all `pyobjc-framework-*`, `py2app` | MIT (or MIT-style) | Permissive — fully GPL-compatible. Source-only attribution preserved. |
-| `pystray` | LGPL-3.0 | LGPL is GPL-compatible; LGPL terms upgrade to GPL when combined with GPL code. |
-| `pyinstaller` | GPL-2.0 + **bootloader exception** | PyInstaller's [bootloader exception](https://github.com/pyinstaller/pyinstaller/blob/develop/COPYING.txt) explicitly allows distributing the produced bundle under ANY license — including GPL-3.0. Only PyInstaller's own *source* is GPL — frozen output is not derivative of PyInstaller itself. |
+| `bleak`, `pillow`, `customtkinter`, `platformdirs`, all `pyobjc-framework-*` | MIT (or MIT-style) | Permissive — fully GPL-compatible. Source-only attribution preserved. (`py2app` was used during early development for macOS bundling but is not included in the shipped PyInstaller-built binaries.) |
+| `pystray` | LGPL-3.0 | LGPL-3.0 is GPL-compatible; the combined binary can be distributed under GPL-3.0, but LGPL's §4 user-replacement requirement applies independently — users of distributed binaries must be able to rebuild with a modified `pystray`. Satisfied by this project's open-source distribution. |
+| `pyinstaller` | GPL-2.0-or-later + **bootloader exception** | PyInstaller's [bootloader exception](https://github.com/pyinstaller/pyinstaller/blob/develop/COPYING.txt) explicitly allows distributing the produced bundle under ANY license — including GPL-3.0. Only PyInstaller's own *source* is GPL — frozen output is not derivative of PyInstaller itself. |

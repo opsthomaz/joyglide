@@ -157,9 +157,12 @@ async def connect_and_setup(device, player, handler_func, command_queue,
     """Open a GATT connection, run the per-link setup, attach the input
     notification handler. Returns the connected ``BleakClient``.
     """
-    client = BleakClient(device.address, disconnected_callback=disconnect_cb) if disconnect_cb else BleakClient(device.address)
+    # ``disconnected_callback`` accepts ``None`` — no need for the
+    # conditional. The previous ``client._device = device`` line set a
+    # private bleak attribute that nothing in this codebase reads; it's
+    # been removed to avoid future collisions with bleak internals.
+    client = BleakClient(device.address, disconnected_callback=disconnect_cb)
     await client.connect(timeout=5.0)
-    client._device = device
     player.address = device.address
     player.name    = device.name or "Joy-Con"
     await asyncio.sleep(0.5)
@@ -245,8 +248,15 @@ async def maintain_connection_loop(client, device, player, handler_func,
             try:
                 if client.is_connected:
                     await asyncio.wait_for(client.disconnect(), timeout=2.0)
-            except (TimeoutError, Exception) as cleanup_err:
-                log.debug(f"disconnect cleanup ignored: {cleanup_err}")
+            except TimeoutError as cleanup_err:
+                # Timeout is the expected failure mode when the BT stack is
+                # off — not a real problem, keep it at debug.
+                log.debug(f"disconnect cleanup timed out: {cleanup_err}")
+            except Exception as cleanup_err:
+                # Anything else is unexpected (bleak internal error, etc.)
+                # — surface it at warning so it's visible in logs.
+                log.warning(f"disconnect cleanup failed: "
+                            f"{type(cleanup_err).__name__}: {cleanup_err}")
 
             await asyncio.sleep(retry_delay)
             retry_delay = min(retry_delay * 1.5, 10.0) # Exponential backoff up to 10s

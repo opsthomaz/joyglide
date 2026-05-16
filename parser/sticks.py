@@ -14,6 +14,13 @@ def parse(state, data: bytes) -> None:
     if state.paused:
         return
 
+    # Runt-packet guard at the top — right-side stick lives at 13..16,
+    # so a packet shorter than 16 bytes can't carry either side's stick
+    # block. The previous ``len(stick_data) != 3`` check only caught the
+    # left-side runt case after slicing.
+    if len(data) < 16:
+        return
+
     stick_data = data[10:13] if state.is_left else data[13:16]
     if len(stick_data) != 3:
         return

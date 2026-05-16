@@ -13,11 +13,19 @@ fresh loop+thread per invocation, leaking both on every click.
     block on JSON file I/O.
 """
 import asyncio
+import threading
 from threading import Thread
 
 from user_preferences import save_settings, settings
 
 _background_loop: asyncio.AbstractEventLoop | None = None
+# Guards the lazy-init check-then-assign in ``_start_background_loop``.
+# Two callers racing into the function (e.g. a tray-menu click on the
+# pystray thread + the Tk Sync button on the AppKit main thread at
+# first launch) would otherwise both pass the ``None`` check, both
+# create separate loops, and both assign — the second wins, the first
+# is orphaned with its scheduled tasks lost.
+_start_lock = threading.Lock()
 
 
 def _start_background_loop() -> None:
@@ -25,15 +33,16 @@ def _start_background_loop() -> None:
     thread. Idempotent — second call is a no-op. Called automatically
     by ``run`` on first invocation."""
     global _background_loop
-    if _background_loop is not None:
-        return
-    loop = asyncio.new_event_loop()
-    _background_loop = loop
-    def _run() -> None:
-        """Daemon-thread entry point — bind the new loop and run forever."""
-        asyncio.set_event_loop(loop)
-        loop.run_forever()
-    Thread(target=_run, daemon=True, name="joyglide-bg-loop").start()
+    with _start_lock:
+        if _background_loop is not None:
+            return
+        loop = asyncio.new_event_loop()
+        _background_loop = loop
+        def _run() -> None:
+            """Daemon-thread entry point — bind the new loop and run forever."""
+            asyncio.set_event_loop(loop)
+            loop.run_forever()
+        Thread(target=_run, daemon=True, name="joyglide-bg-loop").start()
 
 
 def run(coro):

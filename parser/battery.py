@@ -28,7 +28,10 @@ def parse(state, data: bytes) -> None:
     ``battery_current_ma``. No-op if the packet is too short or if
     less than a second has elapsed since the last update.
     """
-    if len(data) < 0x22:
+    # Need at least the voltage + charge bytes; current is a separate
+    # gate later. ``BATTERY_CURRENT_OFFSET = 0x22`` is the first byte
+    # past the always-present fields, so the packet must reach it.
+    if len(data) < BATTERY_CURRENT_OFFSET:
         return
     now = time.monotonic()
     if now - state._battery_last_ts < 1.0:

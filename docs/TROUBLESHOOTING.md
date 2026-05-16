@@ -138,7 +138,7 @@ on JC2 BLE.
 
 ### After a forced disconnect (BT cycled, sleep, range fade), reconnect succeeds but LEDs keep cycling
 
-Was a real bug — fixed in [Unreleased]. The JC2 firmware has a quirk
+Was a real bug — fixed in v0.1.0. The JC2 firmware has a quirk
 documented by ndeadly: cancelling BLE advertising via subcommand
 `0x03/0x02` should also stop the player-LED cycle, but the firmware
 leaves the LEDs cycling indefinitely ("maybe a firmware bug?" per
@@ -161,20 +161,19 @@ The percentage is a linear approximation: 3300 mV → 0%, 4200 mV →
 at ~3.7 V then drop steeply at the end. So a "70%" reading might
 behave more like "85%" early in the discharge curve.
 
-Battery current (since v0.2.12) is more reliable for a "real-time
-charge/discharge" indicator. The dashboard could expose this in a
-future release — see [`ROADMAP.md`](ROADMAP.md) "Battery-current as a
-proxy for discharge rate UI".
+Battery current (parsed from offset 0x22 of input report 0x05) is
+more reliable for a "real-time charge/discharge" indicator. The
+dashboard could expose this in a future release — see
+[`ROADMAP.md`](ROADMAP.md) "Battery-current as a proxy for discharge
+rate UI".
 
 ### App freezes for several seconds when I open the tray menu
 
-→ Should be fixed in v0.2.11 and later. If you're seeing this on a
-recent build, please [open an issue](https://github.com/opsthomaz/joyglide/issues/new?template=bug_report.md)
+→ Should not happen on shipped builds — tray callbacks were moved off
+the AppKit/Tk main thread (sync work like Tk calls and JSON disk I/O
+caused this hang in earlier development). If you're seeing this,
+please [open an issue](https://github.com/opsthomaz/joyglide/issues/new?template=bug_report.md)
 with your OS version and which menu item triggered it.
-
-The pre-v0.2.11 hang was caused by tray callbacks doing synchronous
-work (Tk calls + JSON disk I/O) on the AppKit/Tk main thread; v0.2.11
-moved both off the main thread.
 
 ### Multiple Joy-Cons interfering with each other
 

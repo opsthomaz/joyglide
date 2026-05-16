@@ -20,6 +20,11 @@ from applog import get_logger
 
 log = get_logger(__name__)
 
+# Held forever to keep the Mach activity alive — assigned by ``_boost_macos``.
+# Declared at module top (before the function that touches it) so the
+# ``global`` reference resolves to the module-level name from first call.
+_ANTI_NAP_ACTIVITY = None
+
 
 # ── Anti-throttle / priority boost ───────────────────────────────────────
 
@@ -62,9 +67,6 @@ def _boost_macos() -> None:
         log.info("🛡️ Anti App-Nap protection active.")
     except Exception as e:
         log.warning(f"⚠️ Failed to init Anti App-Nap: {e}")
-
-
-_ANTI_NAP_ACTIVITY = None  # held forever to keep the Mach activity alive
 
 
 def _boost_linux() -> None:

@@ -90,6 +90,11 @@ IMU_GYRO_OFFSET      = 0x36   # 6B = 3 s16 LE (X/Y/Z)
 MAG_OFFSET    = 0x19
 MAG_BLOCK_LEN = 0x06   # 6 bytes total (3 × s16)
 
+# Tier S — hardware-verified on a JC2 (R) over BLE on macOS. Accel,
+# gyro and temperature constants are firmware-defined and cross-confirmed
+# by german77 + ndeadly in JoyconDriver issue #1; the timestamp Hz value
+# was empirically corrected from the 50 kHz figure in that issue to the
+# 1 MHz value measured on our hardware (see note above).
 IMU_TIMESTAMP_HZ          = 1_000_000.0
 IMU_TEMP_OFFSET_DEG_C     = 25.0
 IMU_TEMP_DIVISOR          = 127.0

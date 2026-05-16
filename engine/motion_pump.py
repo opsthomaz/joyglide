@@ -10,6 +10,7 @@ The drain factor adapts to the live BLE packet rate via a packet-period
 EMA tracked elsewhere — same code feels right at 33Hz (macOS) and 67Hz
 (Windows) without a platform branch.
 """
+import asyncio
 import time
 
 from engine.predictor import decay_velocity, predicted_step
@@ -31,7 +32,6 @@ async def motion_pump(state) -> None:
     defense-in-depth (parsers already gate at source, but a future
     caller might bypass).
     """
-    import asyncio
     period = 1.0 / state.input_simulator.refresh_rate
     next_tick = time.perf_counter()
     last_tick_time = next_tick

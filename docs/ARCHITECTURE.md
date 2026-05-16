@@ -6,6 +6,39 @@ A macOS app that connects a Nintendo Switch 2 Joy-Con via BLE and uses it as a m
 
 ---
 
+## Protocol claim tier hierarchy
+
+The Joy-Con 2 BLE protocol is community-reverse-engineered. Every claim
+in this document about offsets, command IDs, response formats, or
+calibration constants is implicitly or explicitly graded against the
+project's six-level tier list (referenced from `CLAUDE.md` §1 and used
+by the `.claude/agents/` verification subagents):
+
+- **Tier S** — empirical convergence: multiple independent sources
+  agree AND the claim has been hardware-tested on a real JC2 in this
+  repo. Trumps everything else.
+- **Tier A** — methodical reverse engineering with traceable
+  methodology (e.g. ndeadly's decrypted pcaps, german77's Wireshark
+  dissector).
+- **Tier B** — official platform documentation (Apple QA1931, Microsoft
+  Learn, switchbrew.org).
+- **Tier C** — working third-party driver code (trust the code, not
+  the comments).
+- **Tier D** — community sources (forums, blog posts, undocumented
+  one-off captures).
+- **Tier F** — speculation, unverified.
+
+### What this tier list tells you
+
+A Tier-S claim has been observed on real hardware in this repository.
+A Tier-A claim has a documented methodology you can re-run. A Tier-D
+or Tier-F claim should be treated as a hypothesis until corroborated.
+When this document quotes a protocol fact without an explicit tier,
+the surrounding context (e.g. "verified on hardware", "per ndeadly")
+identifies the tier. If you can't tell, treat the claim as unverified.
+
+---
+
 ## Hardware: Joy-Con 2 BLE Protocol
 
 ### GATT Profile (discovered through BLE exploration during development)
@@ -55,11 +88,11 @@ Two correctness traps verified on hardware:
    the JC2 firmware silently rejected those. For feature-select the
    payload is 4 bytes, so length byte is `0x04`.
 2. **Feature mask must be `0xFF`, not the trimmed `0x33` (Button +
-   Stick + Mouse + Rumble) we tried in v0.2.12.** The trim was
-   theoretically correct per ndeadly's docs but the JC2 firmware
-   rejected it on real hardware (LEDs stayed in pairing-cycle mode,
-   no vibration, mouse data zeroed). v0.6.0 reverted to `0xFF` to
-   match the working `coffincolors/jc2mouse` Linux driver.
+   Stick + Mouse + Rumble) tried during earlier development.** The
+   trim was theoretically correct per ndeadly's docs but the JC2
+   firmware rejected it on real hardware (LEDs stayed in pairing-
+   cycle mode, no vibration, mouse data zeroed). Reverted to `0xFF`
+   to match the working `coffincolors/jc2mouse` Linux driver.
 
 Without these, the controller still sends button data on input report
 0x05 (buttons stream by default) but the optical mouse + IMU + battery
@@ -110,11 +143,12 @@ over BLE on macOS, May 2026):
   is `raw / 100 = mA`** — both via TropicalCyclone's working driver
   and via 818 s of hardware capture (raw 1820 → 18.2 mA matches the
   525 mAh / 20-h spec).
-- IMU timestamp scale was claimed by german77 to be 50 kHz
-  (`50000 = 1s`) but our hardware capture proves it's **1 MHz**
-  (1 µs/tick): observed Δts = 30000 across 30 ms BLE packets matches
-  1 000 000 Hz, not 50 000. Possibly an over-USB-vs-BT difference;
-  we record the BT-verified value.
+- IMU timestamp scale was historically claimed by german77 to be a
+  lower-rate `50,000-tick = 1-second` value, but our hardware capture
+  proves it's **1 MHz** (1 µs/tick): observed Δts = 30000 across
+  30 ms BLE packets matches 1 000 000 Hz, not the lower-rate figure.
+  Possibly an over-USB-vs-BT difference; we record the BT-verified
+  value.
 - The 4-bit firmware-computed battery level (0..9) does **NOT** appear
   in input report 0x05. It's exclusive to the side-specific input
   reports (0x07, 0x08, 0x09, 0x0A) — see "Side-specific input reports"
@@ -228,8 +262,8 @@ LED commands (8 B payload), vibration presets (4 B payload), and
 feature select (4 B payload) all show exact-length payloads. The
 firmware silently rejects malformed commands where the length byte
 disagrees with the actual payload size. This was the root-cause bug
-behind the v0.6.0 "LEDs cycling on connect, no vibration, mouse data
-zeroed" symptom.
+behind the long-running "LEDs cycling on connect, no vibration, mouse
+data zeroed" symptom seen during earlier development.
 
 Caller must pass exactly the bytes the spec dictates per command.
 The helpers `set_leds`, `play_vibration_preset`, `enable_mouse`,
@@ -312,7 +346,7 @@ None of these are required for daily use; the current pump architecture's percei
 
 ## Software Architecture
 
-After the modular blueprint refactor (v0.3.0/v0.4.0) the codebase is layered, with each layer's allowed dependencies enforced by `import-linter` contracts in CI:
+After the modular blueprint refactor the codebase is layered, with each layer's allowed dependencies enforced by `import-linter` contracts in CI:
 
 ```
 main.py              ── entry point, player lifecycle, __main__ block
@@ -413,7 +447,9 @@ command_queue (thread-safe Queue) bridges BLE / hotkey / tray threads → Tk thr
        │  async, runs on BLE event loop thread
        │
 [joycon.process_mouse()]
-       │  1. Check OPT_STATUS_OFFSET (0x0F) — skip if 0
+       │  1. Lift-off sentinel — OR the four bytes at 0x14-0x17
+       │     (surface-quality + lift-off block); skip if all zero
+       │     (firmware zeros the whole mouse block off-surface).
        │  2. Read raw X/Y U16
        │  3. _delta_u16(curr, prev) — signed delta with wraparound
        │  4. Apply deadzone (0 for Gaming, user-set for others)
@@ -427,7 +463,7 @@ command_queue (thread-safe Queue) bridges BLE / hotkey / tray threads → Tk thr
        │    Gaming:   1.0        (full drain → 33Hz cursor updates, 1:1)
        │    Dynamic:  dt/0.030   (proportional → 60Hz smooth interpolation)
        │    Cinematic: 0.25      (slow drain → inertia/float effect)
-       │  idle brake: 30% decay per tick after 60ms of no motion
+       │  idle brake: keeps 30% per tick (70% decay) after 60ms of no motion
        │
 [mouse.mouse_move(dx, dy)]
        │  updates cached _cx/_cy, clamps to screen bounds
@@ -493,6 +529,12 @@ All settings persisted to JSON via `platformdirs` (macOS: `~/Library/Application
 | `show_gatt_dump` | bool | `false` | Print full GATT profile to terminal on connect |
 | `start_with_sync` | bool | `false` | Auto-start BLE scan on app launch |
 | `ignore_opening_window` | bool | `false` | Start minimized to tray |
+| `imu_enabled` | bool | `false` | Add `FEATURE_IMU` (bit 2) to the feature mask so the controller emits the 18-byte Motion Data block at offset 0x2A of input report 0x05 (timestamp + temp + accel + gyro). Powers future air-mouse mode. |
+| `imu_dump_raw` | bool | `false` | Log decoded IMU values per packet — diagnostic / protocol verification. |
+| `magnetometer_enabled` | bool | `false` | Parse the 6-byte magnetometer block at offset 0x19 of input report 0x05 and stash the raw `(x, y, z)` tuple on state. The mask bit is already set in `0xFF`, so this only gates per-packet parsing. |
+| `magnetometer_dump_raw` | bool | `false` | Log raw magnetometer values per packet — diagnostic. |
+| `battery_log` | bool | `false` | One-liner per 1 Hz tick logging mV / pct / mA. Current at offset 0x22 is hardware-verified `raw u16 / 100 = mA` (Tier S). |
+| `motion_prediction_enabled` | bool | `false` | Pump extrapolates a small synthetic delta on ticks where no fresh BLE packet has arrived since the last tick, using previous BLE-frame velocity. Smooths visible cursor stepping when display refresh > BLE rate. |
 | `devices` | dict | `{}` | Saved controller addresses → `{type: "left"/"right"}` |
 
 ---
@@ -545,7 +587,6 @@ Sourced from `ndeadly/switch2_controller_research` and `german77/JoyconDriver` (
 | `0x10` | Firmware Info | `0x01`=Get Version (returns 12 B of data — see below) |
 | `0x0C` | **Feature Select** | **`0x01`=Get info, `0x02`=Set mask, `0x03`=Clear mask, `0x04`=Enable, `0x05`=Disable** |
 | `0x0D` | **Firmware Update (OTA)** | **`0x01`=Init, `0x04`=Data, `0x05`=Verify** |
-| `0x10` | Firmware Info | `0x01`=Get version |
 | `0x15` | Bluetooth Pairing | `0x01`=Addr exchange, `0x02`=LTK confirm, `0x03`=Finalize |
 
 **Critical:** Commands `0x0D` (OTA init) and `0x0E`/`0x0F` (undefined ranges) cause immediate BLE disconnection — the controller resets when it receives them. This was observed during SPI-dump exploration: testing those IDs crashed the connection.
@@ -565,13 +606,13 @@ Sourced from `ndeadly/switch2_controller_research` and `german77/JoyconDriver` (
 | 6    | `0x40` | (unused)      |                                                                       |
 | 7    | `0x80` | Magnetometer  | Unused in this app.                                                   |
 
-v0.2.12–v0.5.0 shipped `0x33` (Button + Stick + Mouse + Rumble) on
-the theory that turning off the IMU + Magnetometer would save
-controller-side battery. **v0.6.0 reverted to `0xFF`** after hardware
+An earlier development build shipped `0x33` (Button + Stick + Mouse +
+Rumble) on the theory that turning off the IMU + Magnetometer would
+save controller-side battery. **Reverted to `0xFF`** after hardware
 testing: the trimmed `0x33` mask was silently rejected by the JC2
 firmware (LEDs stayed in pairing-cycle mode, vibration didn't fire,
 mouse data block stayed zeroed). The `coffincolors/jc2mouse` Linux
-driver — which works correctly — uses `0xFF`, and our reversion
+driver — which works correctly — uses `0xFF`, and the reversion
 matched theirs. The theoretical battery saving wasn't worth the
 silent feature loss.
 
@@ -587,7 +628,7 @@ Byte 3:  Subcommand    (e.g. 0x02 = Set Feature Mask, 0x04 = Enable Features)
 Byte 4:  0x00          = reserved
 Byte 5:  Payload len   (REAL length of payload — NOT the padded length)
 Byte 6–7: 0x00 0x00    = reserved
-Byte 8+: Payload, padded to 8 bytes minimum (firmware crashes on shorter)
+Byte 8+: Payload, EXACTLY len(payload) bytes — NO padding (firmware silently rejects packets where byte-5 length disagrees with on-wire payload size)
 ```
 
 Reply packets have byte 1 = `0x01` (Device → Host) instead of `0x91`.
@@ -698,7 +739,7 @@ Correct addresses to try (Joy-Con 2 specific, NOT the Joy-Con 1 addresses):
 
 ## Public Research Landscape
 
-### What exists (as of April 2026)
+### What exists (as of May 2026)
 
 | Project | Focus | Status |
 |---------|-------|--------|
@@ -712,7 +753,7 @@ Correct addresses to try (Joy-Con 2 specific, NOT the Joy-Con 1 addresses):
 
 **Cross-validation:** `coffincolors/jc2mouse` independently arrived at the same UUIDs and enable commands — confirms our protocol is correct.
 
-### What is NOT publicly documented (as of April 2026)
+### What is NOT publicly documented (as of May 2026)
 
 - Whether SPI read (command `0x02/0x01`) works without completing `0x15` pairing handshake first
 - Purpose of the 3 silent notify characteristics (`c765a961-...`, `640ca58e-...`, `d3bd69d2-...`)

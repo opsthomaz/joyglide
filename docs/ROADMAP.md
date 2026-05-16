@@ -6,23 +6,29 @@ welcome on any of these (see [`.github/CONTRIBUTING.md`](../.github/CONTRIBUTING
 
 ## 🎯 Tier 1 — high impact, well-scoped
 
-### Linux port
-**Difficulty:** Medium • **Files to add:** 3-4
+### Linux: hardware verification
+**Difficulty:** Medium • **Files to touch:** mostly 0 — verification, not new code
 
-- `osio/mouse/linux.py` — X11 XInput or Wayland evdev cursor injection
-- `osio/hotkey/linux.py` — global hotkey via X11 / xdotool / portal
-- Linux branch in `osio/boost.py` — likely BlueZ HCI for connection
+The Linux backends already ship in v0.1.0:
+
+- `osio/mouse/linux.py` — uinput cursor injection
+- `osio/hotkey/linux.py` — global hotkey via evdev
+- `osio/boost.py` — Linux branch using `hcitool lecup` for connection
   parameter override
-- Optional: `docs/LINUX.md` build/run guide
+- `requirements.txt` already declares `evdev>=1.6.1; sys_platform == 'linux'`
 
-**Why it matters:** Linux + BlueZ unlocks **200 Hz native** — the same
-rate the Switch console itself uses. macOS is capped at 33 Hz by
-Apple policy; Windows tops out at ~67 Hz via WinRT. Linux is the only
-host OS where we can saturate the Joy-Con's native rate.
+What's missing is **hardware confirmation on a real Linux desktop with
+a real Joy-Con 2**. The code is integrated but unverified, so Linux is
+documented as experimental at v0.1.0. The contribution opportunity is:
+pair a JC2 on Linux + BlueZ, run Joyglide, and report whether scan /
+connect / cursor injection / hotkey / boost actually work end-to-end —
+plus fixes for whatever breaks.
 
-The rest of the codebase (`ble/`, `parser/`, `engine/`, `ui/`) is
-already platform-agnostic — adding Linux is pure backend wiring,
-not a rewrite.
+**Why it matters:** Linux + BlueZ in principle unlocks **200 Hz native**
+— the same rate the Switch console itself uses. macOS is capped at 33 Hz
+by Apple policy; Windows tops out at ~67 Hz via WinRT. Linux is the only
+host OS where we can saturate the Joy-Con's native rate. Optional:
+a `docs/LINUX.md` build/run guide once the path is validated.
 
 ### Pro Controller 2 / NSO GameCube support
 **Difficulty:** Easy-Medium • **Files to touch:** 2-4
@@ -56,21 +62,22 @@ of via x64 emulation.
 ### IMU-based motion prediction
 **Difficulty:** Medium-Hard
 
-**Status as of v0.6.0:** `parser/imu.py` exists and decodes the
+**Status at v0.1.0:** `parser/imu.py` exists and decodes the
 18-byte Motion Data block at offset 0x2A of input report 0x05
 (timestamp + temperature + accel + gyro, calibration scales
 verified on hardware). `engine/predictor.py` exists with optical-
 velocity prediction (default off, opt-in via
-`motion_prediction_enabled` — see CHANGELOG).
+`motion_prediction_enabled`).
 
 **Honest scope correction:** input report 0x05 carries ONE IMU
 sample per packet, same rate as the optical sensor. So IMU on this
 report cannot reduce inter-packet latency. The ~6-samples-per-packet
-framing from earlier docs referenced input reports 0x07/0x08 which
-carry 40-byte multi-sample motion blocks — but in "unknown packed
-format" per ndeadly (see `research/ndeadly_switch2/hid_reports.md`).
+framing from earlier exploration notes referenced input reports
+0x07/0x08 which carry 40-byte multi-sample motion blocks — but in
+"unknown packed format" per ndeadly (see
+`research/ndeadly_switch2/hid_reports.md`).
 
-**Real-win path** (out of v0.6.0 scope):
+**Real-win path** (out of current scope):
 1. Reverse-engineer the multi-sample packed format on
    reports 0x07/0x08 (no upstream documentation; needs hardware
    experimentation).
@@ -89,8 +96,10 @@ tuning, etc.
 
 Use the gyro/IMU as the cursor source (Wii Remote-style) instead of
 the optical sensor. Useful for media center / presentation use. The
-hardware data is already in every BLE packet — needs the IMU parser
-above.
+IMU data is already parsed (`parser/imu.py`); what's needed is an
+`engine/` consumer that pipes gyro samples into the motion
+accumulator (with an opt-in user setting and integration drift
+compensation).
 
 ### Sub-pixel cursor on Windows
 **Difficulty:** Hard

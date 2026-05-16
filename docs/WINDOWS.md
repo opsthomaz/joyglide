@@ -108,7 +108,7 @@ If you see *"convert_to returned null"* at runtime: a stale `winsdk` install is 
 
 The repo includes `.github/workflows/build.yml` which on every push to `main` or tag `v*` builds:
 - Windows: `dist/Joyglide.exe` (PyInstaller, single-file)
-- macOS:  `dist/Joyglide-macos.zip` (py2app .app bundled)
+- macOS:  `dist/Joyglide-macos.zip` (PyInstaller .app bundled)
 
 Both are uploaded as Actions artifacts. Tag pushes (`git tag v0.x.x && git push --tags`) additionally attach them to a GitHub Release automatically.
 

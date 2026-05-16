@@ -49,3 +49,6 @@ research/
 # Transfer artifacts (zip used to move files between machines)
 Archive.zip
 *.tar.gz
+
+# uv lockfile — project uses pip, not uv; lockfile is meaningless here
+uv.lock

@@ -26,8 +26,9 @@ def parse(state, data: bytes) -> None:
     """Read mouse X/Y from the report, compute delta, push into accumulator."""
     # Mouse Data block in input report 0x05 spans 0x10-0x17 (8 bytes:
     # X, Y, surface quality, lift-off distance — per ndeadly + german77).
-    # Need at least bytes through 0x17 to read the lift-off sentinel.
-    if len(data) < 0x18:
+    # Need at least bytes through 0x17 to read the lift-off sentinel
+    # (OPT_LIFTOFF_OFFSET = 0x16, +2 for its u16 LE = 0x18).
+    if len(data) < OPT_LIFTOFF_OFFSET + 2:
         return
 
     # Lift-off / no-data sentinel. Earlier builds checked byte 0x0F,

@@ -11,10 +11,15 @@ Layout AND calibration scales verified against:
   * ``research/ndeadly_switch2/hid_reports.md`` → "Input Report 0x05 →
     Motion Data"
   * Upstream issue github.com/german77/JoyconDriver#1 (March 2026), in
-    which german77 and ndeadly explicitly confirmed the offsets AND
-    the firmware-level conversion constants for handle 0x000A:
+    which german77 and ndeadly confirmed the offsets and the
+    firmware-level conversion constants for handle 0x000A:
 
-        timestamp: 50_000 ticks = 1 second
+        timestamp: 1 MHz (1 µs/tick) — Tier S, hardware-verified.
+                   The 50 kHz value cited by german77 issue #1 likely
+                   applies to USB or a different firmware revision;
+                   the BLE-on-macOS verified value is 1 MHz (we
+                   measured Δts ≈ 30000 across 30 ms BLE packets,
+                   which is 1 MHz, not 50 kHz).
         temperature: degC = 25 + raw / 127
         accel: 4096 raw = 1 G
         gyro: 48000 raw = 360 degrees
@@ -78,7 +83,10 @@ def parse(state, data: bytes) -> None:
         negotiation race on reconnect).
 
     On success, sets:
-      * ``state.imu_timestamp``       — u32 firmware counter (50 kHz)
+      * ``state.imu_timestamp``       — u32 firmware counter (1 MHz,
+        i.e. 1 µs/tick — Tier S, hardware-verified. The 50 kHz value
+        cited by german77 issue #1 likely refers to USB or a different
+        firmware revision; the BLE-on-macOS verified value is 1 MHz)
       * ``state.imu_temperature``     — s16 raw
       * ``state.imu_temperature_c``   — float, degrees Celsius
       * ``state.imu_accel``           — ``(ax, ay, az)`` raw s16

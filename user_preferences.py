@@ -139,10 +139,19 @@ def save_settings(settings: dict) -> None:
     """Atomically replace the settings file with the given dict, indented
     for human readability. Caller is responsible for not invoking from
     the AppKit/Tk main thread (use ``bg_loop.save_settings_async`` to
-    push the write to a daemon thread)."""
+    push the write to a daemon thread).
+
+    Atomicity is achieved by writing to a ``.tmp`` sibling on the same
+    filesystem and then ``Path.replace`` — POSIX guarantees the rename
+    is atomic, so any crash / power loss mid-write leaves either the
+    old file untouched or the new one fully in place, never a half-
+    written JSON that would crash ``load_settings`` next launch.
+    """
     settings_file = get_settings_path()
-    with settings_file.open("w") as f:
+    tmp = settings_file.with_suffix(".tmp")
+    with tmp.open("w") as f:
         json.dump(settings, f, indent=2)
+    tmp.replace(settings_file)
 
 
 def create_default_settings() -> None:

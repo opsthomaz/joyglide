@@ -54,8 +54,10 @@ case "$TARGET" in
     *)             TESTS="tests/" ;;
 esac
 
-# Regenerate cosmic-ray.toml so module-path matches the chosen target.
-cat > cosmic-ray.toml <<EOF
+# Write a per-run config to /tmp so the committed cosmic-ray.toml is never
+# overwritten (dirty working tree surprise on every run).
+CR_TOML="/tmp/cosmic-ray-session.toml"
+cat > "$CR_TOML" <<EOF
 [cosmic-ray]
 module-path = "$TARGET"
 timeout = 10.0
@@ -67,12 +69,12 @@ name = "local"
 EOF
 
 rm -f "$SESSION"
-.venv/bin/cosmic-ray init cosmic-ray.toml "$SESSION"
+.venv/bin/cosmic-ray init "$CR_TOML" "$SESSION"
 
 JOBS=$(.venv/bin/cosmic-ray dump "$SESSION" | wc -l | tr -d ' ')
 echo "→ $JOBS mutants generated for $TARGET"
 
-.venv/bin/cosmic-ray --verbosity WARNING exec cosmic-ray.toml "$SESSION"
+.venv/bin/cosmic-ray --verbosity WARNING exec "$CR_TOML" "$SESSION"
 
 echo
 echo "=== cosmic-ray report ==="

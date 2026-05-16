@@ -46,7 +46,7 @@ The controller **accepts** the write (no error, no disconnect). But macOS **pins
 
 The clones live in `research/thefrano_joycon2cpp/` and `research/misaka_joycon2_connector/` for inspection.
 
-**Linux** remains the only fully "open" platform — BlueZ allows arbitrary HCI parametrization. **Windows** comes second (~2× macOS, not ~4× as previously promised). **macOS** comes last by Apple policy, with no known workaround.
+**Linux** remains the only fully "open" platform — BlueZ allows arbitrary HCI parametrization. The Linux backends ship in this repo (`osio/mouse/linux.py`, `osio/hotkey/linux.py`, `osio/boost.py` Linux branch) but are **experimental — present and integrated, but not yet hardware-verified** at v0.1.0; hardware confirmation reports are welcome. **Windows** comes second (~2× macOS, not ~4× as previously promised). **macOS** comes last by Apple policy, with no known workaround.
 
 ---
 

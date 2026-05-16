@@ -16,9 +16,9 @@ Why this NOTICE exists
 
 The MIT license that covered the upstream code grants the right to
 sublicense — meaning derivative works MAY adopt a different (typically
-more restrictive) license. v0.4.0 onwards is GPL-3.0-or-later because
-the maintainer wants to ensure that future forks and derived works
-remain free and accessible to everyone.
+more restrictive) license. Joyglide is GPL-3.0-or-later from its
+v0.1.0 public release because the maintainer wants to ensure that
+future forks and derived works remain free and accessible to everyone.
 
 The original moutella code remains available under MIT in its own
 repository. Any code in this repository that traces back to that
@@ -39,8 +39,7 @@ licensing" section for the full breakdown.
   platformdirs                          MIT
   customtkinter                         MIT
   pyobjc-framework-{Quartz,Cocoa,...}   MIT
-  py2app                                MIT / PSF
-  pyinstaller                           GPL-2.0 + bootloader exception
+  pyinstaller                           GPL-2.0-or-later + bootloader exception
 
 ──────────────────────────────────────────────────────────────────────
 Reference / research repositories cloned into research/
@@ -56,4 +55,5 @@ has its own license; consult the upstream repositories for terms.
   Misaka10571/joycon2-connector
   german77/JoyconDriver
   coffincolors/jc2mouse
+  TropicalCyclone/switch2-controller-driver
   moutella/joycon2mouse

@@ -97,41 +97,33 @@ async def handle_single_joycon(client, player: "Player") -> None:
         else:
             raise
 
-    # NOTE: we do NOT subscribe to the side-specific input report
-    # (0x07 JC-L / 0x08 JC-R) here, even though it would give us the
-    # JC2 firmware's own battery level. Hardware verification on a
-    # JC2 (R) over BLE on macOS shows that subscribing to a second
-    # notify characteristic on the same peripheral kills the first
-    # subscription's stream — input report 0x05 stops emitting after
-    # the second start_notify completes. Possibly a CoreBluetooth
-    # constraint, possibly a JC2 firmware limit. Either way, every
-    # working driver in research/ (coffincolors, TropicalCyclone,
-    # JoyConPlusPlus) subscribes to ONE report, not both.
-    #
-    # Battery percentage falls back to parser.battery's voltage
-    # approximation (linear 3300mV→0%, 4200mV→100%). The
-    # parser.power_info module + INPUT_REPORT_JC{L,R}_UUID constants
-    # are kept in the codebase for future use via command-based
-    # polling (cmd 0x0B/...) which doesn't compete with input notify.
-
     # NOTE on side-specific input reports (0x07 JC-L / 0x08 JC-R):
-    # we deliberately do NOT subscribe. Hardware test on JC2 (R) over
-    # BLE on macOS shows the firmware stops streaming input report
-    # 0x05 once a side-specific subscription is active — the
-    # constraint applies to two parallel *input-report* subscribes.
-    # Constraint does NOT apply to command-response notify channels;
-    # the BASIC channel `c765a961-…` was tested to coexist with
-    # input report 0x05 cleanly (see docs/ARCHITECTURE.md
+    # we deliberately do NOT subscribe here, even though it would give
+    # us the JC2 firmware's own 4-bit battery level (0..9). Hardware
+    # verification on a JC2 (R) over BLE on macOS shows that
+    # subscribing to a second *input-report* notify characteristic on
+    # the same peripheral kills the first subscription's stream —
+    # input report 0x05 stops emitting after the second start_notify
+    # completes. Possibly a CoreBluetooth constraint, possibly a JC2
+    # firmware limit. Either way, every working driver in research/
+    # (coffincolors, TropicalCyclone, JoyConPlusPlus) subscribes to
+    # ONE input report, not both.
+    #
+    # The constraint applies specifically to parallel *input-report*
+    # subscribes; it does NOT apply to command-response notify
+    # channels. The BASIC channel `c765a961-…` was tested to coexist
+    # with input report 0x05 cleanly (see docs/ARCHITECTURE.md
     # "Tier-0 hardware-verified command responses").
     #
-    # The 4-bit firmware-computed battery level (0..9) is exclusive
-    # to side-specific input reports. No command returns it. So
-    # voltage approximation in parser/battery.py remains the working
-    # path on macOS without major refactor.
-    #
-    # `parser/power_info.py` + `INPUT_REPORT_JC{L,R}_UUID` constants
-    # + `subscribe_side_specific()` helper below are kept as
-    # scaffolding for future work.
+    # The 4-bit firmware-computed battery level is exclusive to
+    # side-specific input reports — no command returns it. So
+    # battery percentage falls back to parser.battery's voltage
+    # approximation (linear 3300 mV → 0 %, 4200 mV → 100 %), which
+    # remains the working path on macOS without major refactor. The
+    # parser.power_info module + INPUT_REPORT_JC{L,R}_UUID constants
+    # + subscribe_side_specific() helper below are kept as
+    # scaffolding for future use via command-based polling
+    # (cmd 0x0B/…) which doesn't compete with input-notify.
 
 
 async def subscribe_side_specific(client, player: "Player") -> None:
@@ -389,8 +381,12 @@ async def emit_sound() -> None:
 # clicks; this guard catches programmatic re-entry (e.g. boot-time
 # start_with_sync racing with a tray menu click before the UI hooks the
 # sync_state event). Cleared by the future's done-callback so it survives
-# any exception inside add_player.
+# any exception inside add_player. The lock makes the check-then-set
+# atomic across threads — without it, the tray-menu callback thread and
+# the Tk Sync button could both pass the ``False`` check, both flip to
+# ``True``, and both kick a scan.
 _sync_in_progress = False
+_sync_lock = Lock()
 
 
 def tray_connect_new_controller() -> None:
@@ -402,10 +398,11 @@ def tray_connect_new_controller() -> None:
     against double-click; this is belt-and-suspenders for non-UI callers
     like the boot path)."""
     global _sync_in_progress
-    if _sync_in_progress:
-        log.info("⚠️ Sync already in progress — ignoring duplicate request")
-        return
-    _sync_in_progress = True
+    with _sync_lock:
+        if _sync_in_progress:
+            log.info("⚠️ Sync already in progress — ignoring duplicate request")
+            return
+        _sync_in_progress = True
     # Compute next_number under the lock to prevent two concurrent clicks
     # from both reading len(players)=N and assigning the same player number.
     with _players_lock:
@@ -416,7 +413,8 @@ def tray_connect_new_controller() -> None:
         """Future done-callback — clears the in-progress flag whether
         add_player succeeded, returned False, or raised."""
         global _sync_in_progress
-        _sync_in_progress = False
+        with _sync_lock:
+            _sync_in_progress = False
     fut.add_done_callback(_done)
 
 
