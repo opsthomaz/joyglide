@@ -34,6 +34,8 @@ import time
 # if evdev isn't installed on a Linux box, the user has a broken install
 # and the resulting ImportError is the correct, immediate failure mode
 # (delaying it via try/except just makes diagnosis harder).
+from collections.abc import Sequence
+
 from evdev import UInput, ecodes as e
 
 from applog import get_logger
@@ -45,7 +47,7 @@ log = get_logger(__name__)
 # event code we'll emit; the kernel rejects any code outside this set,
 # so listing them up front catches typos at device-creation time
 # rather than at first-event time.
-_CAPABILITIES = {
+_CAPABILITIES: dict[int, Sequence[int]] = {
     # BTN_SIDE / BTN_EXTRA are the standard 5-button-mouse "back" /
     # "forward" buttons. Browsers + file managers honour them by
     # default — same convention as Windows X1/X2 and macOS button 3/4.
