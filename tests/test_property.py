@@ -283,33 +283,6 @@ def test_decode_joystick_y_extraction_independent_of_x_low_byte():
     assert (x, y) == (27851, 28259)
 
 
-def test_decode_joystick_y_low_nibble_mask_pins_F0_constant():
-    """Mutant `(data[1] & 0xF0)` → `(data[1] & 241)` (= 0xF1). Bit 0 of
-    the mask is the difference. Need an input where bit 0 of data[1]
-    is set AND the resulting y_raw differs measurably.
-
-    Use y_raw = 0x80E so b1 has bit 4 set... actually we need bit 0
-    of data[1] set. data[1] low nibble = (y_raw & 0x0F). To set bit 0,
-    need y_raw & 1 == 1. Use y_raw = 0xC01.
-      b1 = 0x0C | (0xC01 & 0x0F)<<4 = 0x0C | 0x10 = 0x1C
-      b2 = (0xC01 >> 4) & 0xFF = 0xC0
-    ORIGINAL y_raw = (0xC0<<4) | (0x1C & 0xF0)>>4 = 0xC00 | 0x01 = 0xC01
-    MUTANT  y_raw = (0xC0<<4) | (0x1C & 0xF1)>>4 = 0xC00 | 0x01 = 0xC01
-
-    Hmm same. Need bit 0 of (data[1] & mask) to differ. data[1] low bit
-    only matters if mask differs there. 0xF0 = 11110000, 0xF1 = 11110001.
-    Mask bit 0 differs → keep bit 0 of data[1] in result. So pick
-    data[1] with bit 0 set AND set bit-0 contribution to be visible.
-
-    Easier: just verify the half-deflection exact tests above already
-    cover this. Skip this corner — the constant 0xF0 is locked by the
-    existing exact-value tests."""
-    # This test exists for documentation; the half-deflection exact-value
-    # tests above already pin the constant at the math level.
-    x, _y = decode_joystick(_pack_stick(0xC00, 0x800))
-    assert x == 27851
-
-
 def test_decode_joystick_normalization_pins_2048_divisor():
     """Mutants `/ 2048.0` → `/ 2049.0` or `* 2048.0` change the
     normalization. The exact-value tests above kill these because the

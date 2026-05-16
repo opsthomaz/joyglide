@@ -14,6 +14,14 @@ where a regression would silently corrupt cursor behaviour:
 """
 import pytest
 
+from parser.constants import (
+    BATTERY_VOLTAGE_OFFSET,
+    OPT_LIFTOFF_OFFSET,
+    OPT_SURFACE_OFFSET,
+    OPT_X_OFFSET,
+    OPT_Y_OFFSET,
+)
+
 
 # Don't import joycon at module level — InputSimulator's __init__ would
 # call into Quartz/Win32 and fail in the test environment if displays
@@ -70,6 +78,17 @@ class TestDeltaU16:
         # Move from 0x0010 backward to 0xFFF0 → -32.
         assert self.delta(0xFFF0, 0x0010) == -32
 
+    def test_wrap_rollover_by_one_forward(self):
+        # Single-tick forward across the u16 boundary — 0xFFFF → 0x0000
+        # should produce +1, not -65535. Pins the wraparound math at the
+        # smallest step possible.
+        assert self.delta(0, 0xFFFF) == 1
+
+    def test_wrap_rollover_by_one_backward(self):
+        # Single-tick backward across zero — 0x0000 → 0xFFFF should
+        # produce -1, not +65535. Mirrors the forward case.
+        assert self.delta(0xFFFF, 0) == -1
+
     def test_max_forward_jump_clamps_into_signed_range(self):
         # 0x7FFF (32767) is the largest "still positive" interpretation.
         assert self.delta(0x7FFF, 0) == 32767
@@ -85,9 +104,9 @@ class TestBatteryParsing:
     def _make_packet(self, voltage_mv: int, charge_byte: int = 0x00) -> bytes:
         """Build a minimal 0x22-byte input report with the battery fields set."""
         buf = bytearray(0x22)
-        buf[0x1F] = voltage_mv & 0xFF
-        buf[0x20] = (voltage_mv >> 8) & 0xFF
-        buf[0x21] = charge_byte
+        buf[BATTERY_VOLTAGE_OFFSET]     = voltage_mv & 0xFF
+        buf[BATTERY_VOLTAGE_OFFSET + 1] = (voltage_mv >> 8) & 0xFF
+        buf[BATTERY_VOLTAGE_OFFSET + 2] = charge_byte    # 0x21 = BATTERY_CHARGE_OFFSET
         return bytes(buf)
 
     def test_full_voltage_reports_100_percent(self, gamepad):
@@ -168,8 +187,9 @@ class TestBatteryParsing:
         # Raw u16 is divided by 100 to get mA — see parser.battery for
         # the full derivation against TC's driver + our 818-s capture.
         buf = bytearray(0x24)
-        buf[0x1F] = 0x68; buf[0x20] = 0x10                          # 4200 mV
-        buf[0x22] = 0x2C; buf[0x23] = 0x01                          # 0x012C raw = 3.00 mA
+        buf[BATTERY_VOLTAGE_OFFSET]     = 0x68
+        buf[BATTERY_VOLTAGE_OFFSET + 1] = 0x10                       # 4200 mV
+        buf[0x22] = 0x2C; buf[0x23] = 0x01                           # 0x012C raw = 3.00 mA
         gamepad._battery_last_ts = 0.0
         gamepad.process_battery(bytes(buf))
         assert gamepad.battery_current_ma == 3.00
@@ -193,11 +213,17 @@ class TestProcessMouseLiftoff:
     def _packet_with_mouse(self, x=0x1234, y=0x5678,
                            surface=0x0001, liftoff=0x0001) -> bytes:
         # Build a minimum-viable input report 0x05 with mouse fields set.
+        # Offsets sourced from parser.constants (same source-of-truth the
+        # parser uses, per ndeadly hid_reports.md).
         buf = bytearray(0x18)
-        buf[0x10] = x & 0xFF;       buf[0x11] = (x >> 8) & 0xFF
-        buf[0x12] = y & 0xFF;       buf[0x13] = (y >> 8) & 0xFF
-        buf[0x14] = surface & 0xFF; buf[0x15] = (surface >> 8) & 0xFF
-        buf[0x16] = liftoff & 0xFF; buf[0x17] = (liftoff >> 8) & 0xFF
+        buf[OPT_X_OFFSET]           = x & 0xFF
+        buf[OPT_X_OFFSET + 1]       = (x >> 8) & 0xFF
+        buf[OPT_Y_OFFSET]           = y & 0xFF
+        buf[OPT_Y_OFFSET + 1]       = (y >> 8) & 0xFF
+        buf[OPT_SURFACE_OFFSET]     = surface & 0xFF
+        buf[OPT_SURFACE_OFFSET + 1] = (surface >> 8) & 0xFF
+        buf[OPT_LIFTOFF_OFFSET]     = liftoff & 0xFF
+        buf[OPT_LIFTOFF_OFFSET + 1] = (liftoff >> 8) & 0xFF
         return bytes(buf)
 
     def test_skips_when_mouse_block_all_zero(self, gamepad):
@@ -256,6 +282,125 @@ class TestProcessButtonsPause:
         # While paused: no events emitted, last_data NOT updated.
         assert calls == []
         assert gamepad.last_data == bytes(released)
+
+        # ── Resume: user is still holding R. Re-feed the same pressed
+        # packet. The deferred press should now fire a single mouse_down
+        # (diff: cur=pressed vs frozen-last=released), and crucially NO
+        # phantom mouse_up — without the pause-freeze, last_data would
+        # have been advanced through pause and the next "still pressed"
+        # packet would diff against itself (no event) or against a
+        # mid-press snapshot, producing the wrong dispatch.
+        gamepad.paused = False
+        gamepad.process_buttons(bytes(pressed))
+        assert "up" not in calls, (
+            "phantom mouse_up fired after unpause — pause-freeze invariant broken"
+        )
+        assert calls == ["down"], (
+            "post-unpause re-feed should fire exactly one mouse_down "
+            "for the deferred press, nothing else"
+        )
+
+
+class TestProcessMouseDelta:
+    """``JoyCon.process_mouse`` → ``parser.mouse_optical.parse`` delta +
+    accumulator path. Covers the wraparound-aware delta math from the
+    optical sensor's u16 absolute position into the per-axis accumulator.
+
+    The lift-off path is covered separately by ``TestProcessMouseLiftoff``;
+    here we focus on the case where the sensor IS reporting a fresh
+    sample and the parser must compute a delta against ``last_mouse_pos``
+    and accumulate it.
+    """
+
+    def _packet(self, x: int, y: int = 0,
+                surface: int = 0x0001, liftoff: int = 0x0001) -> bytes:
+        """Minimum-viable input report 0x05 with mouse fields set and the
+        surface byte non-zero (so the lift-off check doesn't suppress
+        the sample)."""
+        buf = bytearray(0x18)
+        buf[OPT_X_OFFSET]           = x & 0xFF
+        buf[OPT_X_OFFSET + 1]       = (x >> 8) & 0xFF
+        buf[OPT_Y_OFFSET]           = y & 0xFF
+        buf[OPT_Y_OFFSET + 1]       = (y >> 8) & 0xFF
+        buf[OPT_SURFACE_OFFSET]     = surface & 0xFF
+        buf[OPT_SURFACE_OFFSET + 1] = (surface >> 8) & 0xFF
+        buf[OPT_LIFTOFF_OFFSET]     = liftoff & 0xFF
+        buf[OPT_LIFTOFF_OFFSET + 1] = (liftoff >> 8) & 0xFF
+        return bytes(buf)
+
+    def test_small_positive_delta_accumulates_with_correct_sign(self, gamepad, monkeypatch):
+        """prev_x = 100, curr_x = 105 → dx_raw = +5. With dynamic profile,
+        disable_acceleration=True, and sensitivity 1.0 the multiplier is
+        forced to 1.0 (see ``parser/mouse_optical.py:80``: "if
+        disable_accel or profile == 'gaming': multiplier = 1.0"), so the
+        accumulator grows by EXACTLY +5.0. Pins the sign convention AND
+        the delta math.
+
+        We use "dynamic" rather than "gaming" because the gaming profile
+        bypasses the accumulator entirely (calls ``mouse_move`` directly
+        per the comment at line 99-105) — the accumulator stays at 0.
+        """
+        import parser.mouse_optical
+        monkeypatch.setitem(parser.mouse_optical.settings, "profile", "dynamic")
+        monkeypatch.setitem(parser.mouse_optical.settings, "disable_acceleration", True)
+        monkeypatch.setitem(parser.mouse_optical.settings, "sensitivity", 1.0)
+
+        gamepad.last_mouse_pos = (100, 200)
+        gamepad._dx_accum = 0.0
+        gamepad._dy_accum = 0.0
+        gamepad.process_mouse(self._packet(x=105, y=200))
+        # multiplier = 1.0 (disable_accel), sensitivity = 1.0 → exactly +5.
+        assert gamepad._dx_accum == 5.0, (
+            f"expected _dx_accum = 5.0 (dx_raw=5, mult=1.0, sens=1.0); "
+            f"got {gamepad._dx_accum}"
+        )
+
+    def test_wraparound_delta_is_small_positive_not_huge_negative(self, gamepad, monkeypatch):
+        """prev_x = 65530 (0xFFFA), curr_x = 5 → wraparound. The
+        delta_u16 helper returns +11, not -65525. Without
+        wraparound-awareness, the cursor would lurch by ~65k pixels
+        every time the sensor's u16 rolled over.
+
+        Pin: the accumulator gains a POSITIVE ~11 here, with sign
+        intact and magnitude within the same ballpark as a "+11" delta."""
+        import parser.mouse_optical
+        monkeypatch.setitem(parser.mouse_optical.settings, "profile", "dynamic")
+        monkeypatch.setitem(parser.mouse_optical.settings, "disable_acceleration", True)
+        monkeypatch.setitem(parser.mouse_optical.settings, "sensitivity", 1.0)
+
+        gamepad.last_mouse_pos = (65530, 200)
+        gamepad._dx_accum = 0.0
+        gamepad.process_mouse(self._packet(x=5, y=200))
+        # delta_u16(5, 65530) = (5 - 65530) & 0xFFFF = 11 (positive)
+        # disable_acceleration=True → multiplier 1.0, sensitivity 1.0 →
+        # _dx_accum should equal exactly 11.0 (no curve, no scaling).
+        assert gamepad._dx_accum == 11.0, (
+            "wraparound delta of +11 (not -65525) should accumulate cleanly; "
+            f"got {gamepad._dx_accum}"
+        )
+
+    def test_paused_does_not_accumulate(self, gamepad, monkeypatch):
+        """Consistency with TestProcessButtonsPause — while paused, the
+        delta path must NOT push into the accumulator. last_mouse_pos
+        IS updated (so resume doesn't see a huge jump), but the
+        accumulator stays frozen so it doesn't burst on unpause."""
+        import parser.mouse_optical
+        monkeypatch.setitem(parser.mouse_optical.settings, "profile", "dynamic")
+        monkeypatch.setitem(parser.mouse_optical.settings, "disable_acceleration", True)
+        monkeypatch.setitem(parser.mouse_optical.settings, "sensitivity", 1.0)
+
+        gamepad.last_mouse_pos = (100, 200)
+        gamepad._dx_accum = 0.0
+        gamepad._dy_accum = 0.0
+        gamepad.paused = True
+        gamepad.process_mouse(self._packet(x=200, y=300))   # large delta
+        assert gamepad._dx_accum == 0.0, (
+            "paused process_mouse must NOT accumulate — burst-on-resume bug"
+        )
+        assert gamepad._dy_accum == 0.0
+        # But last_mouse_pos IS updated so the post-resume delta is
+        # relative to the most recent (paused) position.
+        assert gamepad.last_mouse_pos == (200, 300)
 
 
 class TestPacketRateEMA:

@@ -18,6 +18,17 @@ import parser.imu
 from parser.constants import IMU_BLOCK_LEN, IMU_OFFSET
 
 
+def test_imu_timestamp_hz_pinned_at_1_mhz():
+    """CLAUDE.md §4 (Tier S, hardware-verified): IMU timestamp ticks at
+    1 MHz (1 µs/tick). A 'correction' back to 50 kHz — the value cited
+    in github.com/german77/JoyconDriver#1 — would be a Tier-D regression
+    against measured BLE-on-macOS behaviour (Δts = 30000 across 30ms
+    packets = 1 MHz, not 50 kHz).
+    """
+    from parser.constants import IMU_TIMESTAMP_HZ
+    assert IMU_TIMESTAMP_HZ == 1_000_000.0
+
+
 class _MockState:
     """Minimum state object the IMU parser writes to. Mirrors the
     ``JoyCon`` attrs that ``parser.imu`` mutates."""
