@@ -27,7 +27,7 @@ elif sys.platform.startswith("linux"):
     # below. The macos/windows branches escape this only because their
     # native deps (Quartz, winrt) aren't resolvable on Ubuntu. This is the
     # platform-dispatcher pattern, not a real type error.
-    from osio.mouse.linux import InputSimulator, check_accessibility  # type: ignore[no-redef]  # pyright: ignore[reportAssignmentType]
+    from osio.mouse.linux import InputSimulator, check_accessibility  # pyright: ignore[reportAssignmentType]
 
     def request_accessibility() -> None:
         """No-op on Linux — uinput permission is granted via the udev
