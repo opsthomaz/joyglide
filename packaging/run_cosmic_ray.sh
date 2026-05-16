@@ -42,6 +42,10 @@ case "$TARGET" in
                tests/test_property.py::test_delta_u16_consistent_with_unsigned_delta
                tests/test_joycon.py::TestDeltaU16" ;;
     parser/battery.py)
+        # test_property.py = Hypothesis property tests (shape).
+        # test_battery.py  = exact-value pinning tests (truth) — added
+        #                    2026-05-16 to kill the cosmic-ray survivors
+        #                    that the shape-only tests missed.
         TESTS="tests/test_property.py::test_battery_voltage_in_plausible_range_is_stored
                tests/test_property.py::test_battery_pct_clamped_0_to_100
                tests/test_property.py::test_battery_implausible_voltage_does_not_update_state
@@ -49,7 +53,8 @@ case "$TARGET" in
                tests/test_property.py::test_battery_current_parsed_when_field_present
                tests/test_property.py::test_battery_current_stays_none_when_packet_short
                tests/test_property.py::test_battery_short_packet_skipped
-               tests/test_property.py::test_battery_throttle_one_second" ;;
+               tests/test_property.py::test_battery_throttle_one_second
+               tests/test_battery.py" ;;
     parser/imu.py) TESTS="tests/test_imu.py" ;;
     *)             TESTS="tests/" ;;
 esac
