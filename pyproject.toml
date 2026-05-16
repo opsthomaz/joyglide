@@ -114,7 +114,10 @@ known_first_party = ["applog", "ble", "bg_loop", "engine", "joycon",
 ignore = ["DEP003"]
 ignore_notebooks = true
 extend_exclude = ["research", "build", "dist", "packaging"]
-per_rule_ignores = { "DEP001" = ["winrt"] }
+# evdev is Linux-only (sys_platform marker in requirements.txt); deptry
+# doesn't resolve sys_platform markers so reports a false-positive on
+# osio/{mouse,hotkey}/linux.py. Same situation as winrt above.
+per_rule_ignores = { "DEP001" = ["winrt", "evdev"] }
 
 [tool.pytest.ini_options]
 # Test runner config. Tests live in tests/, project code is at root.
