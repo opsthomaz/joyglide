@@ -25,6 +25,8 @@ changes take effect immediately because the BLE threads read the same
 import asyncio
 import os
 import queue
+import subprocess
+import sys
 from threading import Lock
 
 from applog import get_logger
@@ -450,6 +452,24 @@ if __name__ == "__main__":
     from osio.mouse import check_accessibility, request_accessibility
     if not check_accessibility():
         log.warning("⚠️ macOS Accessibility Permission missing!")
+
+        # macOS-only: wipe any stale TCC entry from a previous build's
+        # PyInstaller ad-hoc signature BEFORE prompting. Without this,
+        # AXIsProcessTrustedWithOptions often doesn't fire the system
+        # prompt — it sees an existing entry for this bundle ID (left
+        # over from an earlier build's signature) and treats the
+        # registration as a no-op. The user is then stuck with a
+        # toggle in System Settings that LOOKS enabled but is tied to
+        # a signature the current process doesn't match. Resetting
+        # first gives a clean prompt aligned with the running
+        # signature. No-op on first launch (nothing to reset) and on
+        # non-Darwin (tccutil doesn't exist there).
+        if sys.platform == "darwin":
+            subprocess.run(
+                ["tccutil", "reset", "Accessibility", "com.opsthomaz.joyglide"],
+                capture_output=True, check=False,
+            )
+
         # Trigger the system prompt and register the app in the TCC list.
         # Without this the app never appears in System Settings →
         # Accessibility, so the user has nothing to toggle. No-op when

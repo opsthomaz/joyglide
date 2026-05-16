@@ -34,7 +34,7 @@ def show(parent) -> None:
     """
     warn_win = ctk.CTkToplevel(parent)
     warn_win.title("Permission Required")
-    warn_win.geometry("520x460")
+    warn_win.geometry("520x540")
     warn_win.lift()
     warn_win.attributes("-topmost", True)
 
@@ -54,6 +54,31 @@ def show(parent) -> None:
     ctk.CTkButton(warn_win, text="Open System Settings", fg_color="#3498db",
                    font=("Helvetica", 14, "bold"), height=40,
                    command=open_sys_settings).pack(pady=(12, 6))
+
+    # ── "I granted — Quit & Reopen" workaround for the TCC-cache bug ──
+    # macOS does not invalidate the running process's cached Accessibility
+    # trust state when the user grants permission, so the polling loop
+    # below often never sees the grant — the process needs a fresh start
+    # to re-query TCC. Apple's own recommendation in this scenario is
+    # "quit and reopen." This button automates that.
+    def quit_and_relaunch():
+        def _run():
+            app_path = find_app_bundle_path()
+            if app_path:
+                parent.after(0, lambda p=app_path: subprocess.Popen(["open", "-n", p]))
+            log.info("Quit & Reopen — restarting so the next process sees the granted permission.")
+            parent.after(200, lambda: os._exit(0))
+        threading.Thread(target=_run, daemon=True, name="joyglide-quit-relaunch").start()
+
+    ctk.CTkButton(warn_win, text="✓ I granted — Quit & Reopen",
+                   fg_color="#27ae60", hover_color="#1e8449",
+                   font=("Helvetica", 13, "bold"), height=36,
+                   command=quit_and_relaunch).pack(pady=(4, 2))
+    ctk.CTkLabel(warn_win,
+                  text="macOS doesn't notify running apps when Accessibility\n"
+                       "is granted. Click here after toggling it on.",
+                  font=("Helvetica", 10), text_color="gray",
+                  justify="center").pack(pady=(0, 8))
 
     # ── Stale-entry recovery ────────────────────────────────────────
     ctk.CTkFrame(warn_win, height=1, fg_color="#444").pack(fill="x", padx=24, pady=(16, 12))
@@ -124,8 +149,8 @@ def show(parent) -> None:
             poll_count[0] += 1
             if poll_count[0] > 15:
                 poll_label.configure(
-                    text="Polling timed out. Please re-open this dialog if you've\n"
-                         "granted permission since.",
+                    text="Polling timed out — macOS isn't notifying this process.\n"
+                         "If you've granted permission, click the green button above.",
                     text_color="#e67e22",
                     font=("Helvetica", 11),
                 )
