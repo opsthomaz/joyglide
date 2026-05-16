@@ -222,6 +222,8 @@ class InputSimulator:
         self._left_down  = False
         self._right_down = False
         self._last_click_time = 0.0
+        self._last_click_x = 0.0
+        self._last_click_y = 0.0
         self._click_count = 1
 
         # Cache initial cursor position. Avoids a CGEventCreate call per
@@ -286,11 +288,26 @@ class InputSimulator:
         # as a single, or by treating two clicks 10 s apart as one
         # double on a -10 s NTP step).
         now = time.monotonic()
-        if settings.get("double_click_enabled", True) and now - self._last_click_time < 0.4:
+        # Native macOS double-click detection checks BOTH time and
+        # position (NSEvent.mouseSlopForDoubleClick ≈ a few pixels).
+        # Two clicks within 400ms but at different positions — e.g.
+        # tab A then tab B in Firefox — must be classified as two
+        # SINGLE clicks, not as a double-click. Otherwise the second
+        # click arrives with click_count=2 and the receiving app
+        # interprets it as a double-click on the wrong target
+        # (Firefox tab activation breaks; menus dismiss strangely).
+        # 5 px tolerance matches Apple's default mouse-slop.
+        same_spot = (abs(self._cx - self._last_click_x) <= 5
+                     and abs(self._cy - self._last_click_y) <= 5)
+        if (settings.get("double_click_enabled", True)
+                and same_spot
+                and now - self._last_click_time < 0.4):
             self._click_count = min(3, self._click_count + 1)
         else:
             self._click_count = 1
         self._last_click_time = now
+        self._last_click_x = self._cx
+        self._last_click_y = self._cy
 
         _post(CG.kCGEventLeftMouseDown, (self._cx, self._cy), CG.kCGMouseButtonLeft, self._click_count)
 
