@@ -52,7 +52,6 @@ class JoyCon:
         ``start_pump`` (idempotent — usually called from the parser
         when the first valid mouse packet arrives) before motion
         events propagate to the cursor."""
-        self.settings         = None
         self.input_simulator  = InputSimulator()
         self.side             = side
         self.is_left          = side != "right"

@@ -413,10 +413,15 @@ def tray_connect_new_controller() -> None:
 
     def _done(_f):
         """Future done-callback — clears the in-progress flag whether
-        add_player succeeded, returned False, or raised."""
+        add_player succeeded, returned False, or raised. Surfaces a raised
+        exception: without retrieving it here, a failure inside add_player
+        (e.g. the connect path or players.append) vanishes silently."""
         global _sync_in_progress
         with _sync_lock:
             _sync_in_progress = False
+        exc = _f.exception()
+        if exc is not None:
+            log.error(f"add_player failed: {type(exc).__name__}: {exc}")
     fut.add_done_callback(_done)
 
 

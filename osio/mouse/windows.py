@@ -21,7 +21,7 @@ Optimization choices for the BLE→cursor hot path on Windows:
      mouse_move path does not call GetCursorPos.
 """
 import ctypes
-import time
+import threading
 from ctypes import wintypes
 from applog import get_logger
 
@@ -103,20 +103,32 @@ _input_buf.type = INPUT_MOUSE
 _INPUT_SIZE     = ctypes.sizeof(_INPUT)
 _INPUT_PTR      = ctypes.byref(_input_buf)
 
+# The cached struct is module-global and shared, but each connected
+# controller drives the cursor from its OWN asyncio/daemon thread (see
+# main.py — multiple Joy-Cons connect concurrently, which CLAUDE.md §3
+# explicitly supports). Without serialisation, two threads would fill the
+# same MOUSEINPUT fields and race the SendInput read, garbling events. The
+# lock makes fill+post atomic; contention is negligible (SendInput is a
+# microsecond-scale syscall, events arrive at most ~120 Hz per controller).
+_send_lock = threading.Lock()
+
 
 def _send_mouse(flags, dx=0, dy=0, mouseData=0):
     """Fill the cached MOUSEINPUT struct in place and post a single
     SendInput. The cached struct + cached pointer avoid ~100 bytes of
     ctypes object construction per cursor event — meaningful at 60-120Hz
-    pump rates where this gets called constantly."""
-    mi = _input_buf.mi
-    mi.dx          = dx
-    mi.dy          = dy
-    mi.mouseData   = mouseData
-    mi.dwFlags     = flags
-    mi.time        = 0
-    mi.dwExtraInfo = 0
-    user32.SendInput(1, _INPUT_PTR, _INPUT_SIZE)
+    pump rates where this gets called constantly. Serialised by
+    ``_send_lock`` so concurrent controllers can't clobber the shared
+    struct mid-call."""
+    with _send_lock:
+        mi = _input_buf.mi
+        mi.dx          = dx
+        mi.dy          = dy
+        mi.mouseData   = mouseData
+        mi.dwFlags     = flags
+        mi.time        = 0
+        mi.dwExtraInfo = 0
+        user32.SendInput(1, _INPUT_PTR, _INPUT_SIZE)
 
 
 class _DEVMODEW(ctypes.Structure):
@@ -232,9 +244,6 @@ class InputSimulator:
     def __init__(self) -> None:
         """Probe screen dimensions and refresh rate. Initialise the
         sub-pixel accumulator at zero."""
-        self._left_down  = False
-        self._right_down = False
-        self._last_click_time = 0.0
         # Sub-pixel accumulator — Windows SendInput only takes ints.
         self._frac_dx = 0.0
         self._frac_dy = 0.0
@@ -266,26 +275,19 @@ class InputSimulator:
 
     def mouse_down(self) -> None:
         """Press the left mouse button. No double-click counting needed —
-        Windows handles that at the OS layer."""
-        self._left_down = True
-        # Windows handles double-click detection at the OS layer (DoubleClickTime),
-        # so we just relay the down/up events and let the system decide.
-        self._last_click_time = time.time()
+        Windows handles that at the OS layer (DoubleClickTime)."""
         _send_mouse(MOUSEEVENTF_LEFTDOWN)
 
     def mouse_up(self) -> None:
         """Release the left mouse button."""
-        self._left_down = False
         _send_mouse(MOUSEEVENTF_LEFTUP)
 
     def mouse_down_right(self) -> None:
         """Press the right mouse button."""
-        self._right_down = True
         _send_mouse(MOUSEEVENTF_RIGHTDOWN)
 
     def mouse_up_right(self) -> None:
         """Release the right mouse button."""
-        self._right_down = False
         _send_mouse(MOUSEEVENTF_RIGHTUP)
 
     def mouse_down_middle(self) -> None:

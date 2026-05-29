@@ -4,7 +4,9 @@ profile-aware curve, accumulates into the engine's scroll bucket.
 """
 import time
 
+from parser.constants import STICK_BLOCK_LEN, STICK_LEFT_OFFSET, STICK_RIGHT_OFFSET
 from user_preferences import settings
+from utils import unpack_stick_12bit
 
 
 def parse(state, data: bytes) -> None:
@@ -14,19 +16,15 @@ def parse(state, data: bytes) -> None:
     if state.paused:
         return
 
-    # Runt-packet guard at the top — right-side stick lives at 13..16,
-    # so a packet shorter than 16 bytes can't carry either side's stick
-    # block. The previous ``len(stick_data) != 3`` check only caught the
-    # left-side runt case after slicing.
-    if len(data) < 16:
+    # Runt-packet guard at the top — the right-side stick block ends at
+    # STICK_RIGHT_OFFSET + STICK_BLOCK_LEN, so a shorter packet can't carry
+    # either side's stick. The previous ``len(stick_data) != 3`` check only
+    # caught the left-side runt case after slicing.
+    if len(data) < STICK_RIGHT_OFFSET + STICK_BLOCK_LEN:
         return
 
-    stick_data = data[10:13] if state.is_left else data[13:16]
-    if len(stick_data) != 3:
-        return
-
-    x_raw = ((stick_data[1] & 0x0F) << 8) | stick_data[0]
-    y_raw = (stick_data[2] << 4) | ((stick_data[1] & 0xF0) >> 4)
+    off = STICK_LEFT_OFFSET if state.is_left else STICK_RIGHT_OFFSET
+    x_raw, y_raw = unpack_stick_12bit(data[off], data[off + 1], data[off + 2])
     x = (x_raw - 2048) / 2048.0
     y = (y_raw - 2048) / 2048.0
 

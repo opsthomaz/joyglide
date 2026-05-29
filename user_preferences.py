@@ -107,6 +107,55 @@ DEFAULTS = {
 LEGACY_KEYS = {"use_delta_time_pump", "use_raw_mode"}
 
 
+# Value-level validation specs (see validate_settings). Ranges are
+# inclusive; ``None`` upper bound means unbounded above. Documented ranges
+# mirror the comments in DEFAULTS and the UI controls.
+_NUMERIC_RANGES = {
+    "sensitivity":        (0.5, 3.0),   # global multiplier
+    "deadzone":           (0, None),    # raw optical units, >= 0
+    "acceleration_level": (1, 3),       # 1=Low, 2=Med, 3=High
+    "scroll_sensitivity": (1, 10),      # normalised so 4 = 1.0x
+}
+_INT_SETTING_KEYS = {"deadzone", "acceleration_level", "scroll_sensitivity"}
+_VALID_PROFILES = {"dynamic", "gaming", "cinematic"}
+
+
+def validate_settings(settings: dict) -> dict:
+    """Coerce out-of-range or wrong-typed values to safe defaults.
+
+    Users are told to hand-edit ``settings.json``, so a corrupt or typo'd
+    value (``"sensitivity": "fast"``, ``"acceleration_level": 99``) must not
+    reach the hot-path parsers. Numeric values clamp to their documented
+    range (and int-typed keys coerce to ``int``); wrong-typed booleans,
+    dicts, the ``profile`` enum, and non-numeric numerics reset to the
+    ``DEFAULTS`` value. Mutates and returns ``settings``.
+    """
+    # Type guard for bool / dict keys against DEFAULTS. (bool is an int
+    # subclass, so an int given for a bool key still resets — intentional.)
+    for key, default in DEFAULTS.items():
+        if key not in settings:
+            continue
+        if (isinstance(default, bool) and not isinstance(settings[key], bool)) or \
+           (isinstance(default, dict) and not isinstance(settings[key], dict)):
+            settings[key] = default
+
+    if settings.get("profile") not in _VALID_PROFILES:
+        settings["profile"] = DEFAULTS["profile"]
+
+    for key, (lo, hi) in _NUMERIC_RANGES.items():
+        val = settings.get(key)
+        # Exclude bool (int subclass) — a True given for a numeric is junk.
+        if isinstance(val, bool) or not isinstance(val, (int, float)):
+            settings[key] = DEFAULTS[key]
+            continue
+        val = max(lo, val)
+        if hi is not None:
+            val = min(hi, val)
+        settings[key] = int(val) if key in _INT_SETTING_KEYS else val
+
+    return settings
+
+
 def get_settings_path() -> "Path":
     """Resolve the absolute path to ``settings.json`` and ensure its parent
     directory exists. The directory location follows the OS convention
@@ -137,6 +186,7 @@ def load_settings() -> dict:
                 settings[key] = default
         for key in LEGACY_KEYS:
             settings.pop(key, None)
+        validate_settings(settings)
         save_settings(settings)
         return settings
     create_default_settings()

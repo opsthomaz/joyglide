@@ -59,6 +59,44 @@ class TestDecodeJoystick:
             assert -32768 <= y <= 32767
 
 
+class TestUnpackStick12bit:
+    """``unpack_stick_12bit`` is the shared protocol-level bit-unpack for the
+    Joy-Con's packed-12-bit stick format. Both ``utils.decode_joystick`` and
+    ``parser.sticks`` build on it, so the load-bearing bit math lives in one
+    place. It returns the two raw 12-bit values (0..4095), no normalisation."""
+
+    @staticmethod
+    def pack(x: int, y: int) -> tuple[int, int, int]:
+        """Inverse packing: 12-bit x,y → the 3 wire bytes."""
+        b0 = x & 0xFF
+        b1 = ((x >> 8) & 0x0F) | ((y & 0x0F) << 4)
+        b2 = (y >> 4) & 0xFF
+        return b0, b1, b2
+
+    def test_round_trips_arbitrary_12bit_values(self):
+        from utils import unpack_stick_12bit
+        x, y = 0xABC, 0x123
+        b0, b1, b2 = self.pack(x, y)
+        assert unpack_stick_12bit(b0, b1, b2) == (x, y)
+
+    def test_centre_value(self):
+        from utils import unpack_stick_12bit
+        b0, b1, b2 = self.pack(2048, 2048)
+        assert unpack_stick_12bit(b0, b1, b2) == (2048, 2048)
+
+    def test_full_scale_extremes(self):
+        from utils import unpack_stick_12bit
+        assert unpack_stick_12bit(*self.pack(4095, 0)) == (4095, 0)
+        assert unpack_stick_12bit(*self.pack(0, 4095)) == (0, 4095)
+
+    def test_output_always_within_12bit_range(self):
+        from utils import unpack_stick_12bit
+        for b0, b1, b2 in [(0xFF, 0xFF, 0xFF), (0x00, 0x00, 0x00), (0xAB, 0xCD, 0xEF)]:
+            x, y = unpack_stick_12bit(b0, b1, b2)
+            assert 0 <= x <= 4095
+            assert 0 <= y <= 4095
+
+
 class TestResourcePath:
     """``resource_path`` resolves bundled assets correctly in both source-tree
     and frozen (PyInstaller) runs. The frozen path is exposed via

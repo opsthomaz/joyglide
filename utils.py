@@ -11,20 +11,34 @@ import sys
 from os import path
 
 
+def unpack_stick_12bit(b0: int, b1: int, b2: int) -> tuple[int, int]:
+    """Unpack the Joy-Con's packed-12-bit-per-axis stick format from its 3
+    wire bytes into raw ``(x, y)`` values in 0..4095.
+
+        x = ((b1 & 0x0F) << 8) | b0
+        y = (b2 << 4) | ((b1 & 0xF0) >> 4)
+
+    This is the protocol-load-bearing bit math; ``decode_joystick`` (here)
+    and ``parser.sticks`` both build on it so a future offset/packing fix
+    lives in exactly one place.
+    """
+    x_raw = ((b1 & 0x0F) << 8) | b0
+    y_raw = (b2 << 4) | ((b1 & 0xF0) >> 4)
+    return x_raw, y_raw
+
+
 def decode_joystick(data: bytes) -> tuple[int, int]:
     """Decode a 3-byte packed-12-bit stick reading into normalised int16.
 
-    Joy-Con sticks are 12-bit-per-axis values packed into 3 bytes:
-        x = ((b1 & 0x0F) << 8) | b0
-        y = (b2 << 4) | (b1 >> 4)
-    Result is centred around 2048 (raw 0..4095) and normalised to [-1, 1],
-    then scaled to int16 range so consumers can treat it like an Xbox stick.
+    Joy-Con sticks are 12-bit-per-axis values packed into 3 bytes (see
+    ``unpack_stick_12bit``). Result is centred around 2048 (raw 0..4095) and
+    normalised to [-1, 1], then scaled to int16 range so consumers can treat
+    it like an Xbox stick.
     """
     try:
         if len(data) != 3:
             return 0, 0
-        x_raw = ((data[1] & 0x0F) << 8) | data[0]
-        y_raw = (data[2] << 4) | ((data[1] & 0xF0) >> 4)
+        x_raw, y_raw = unpack_stick_12bit(data[0], data[1], data[2])
         x = (x_raw - 2048) / 2048.0
         y = (y_raw - 2048) / 2048.0
         deadzone = 0.08

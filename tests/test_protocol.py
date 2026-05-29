@@ -14,7 +14,7 @@ Cross-references:
     commands.md "Command Header" table).
 """
 import asyncio
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -166,3 +166,89 @@ class TestFeatureMaskDefault:
             assert FEATURE_MASK_DEFAULT & bit, (
                 f"{name} (0x{bit:02X}) missing from FEATURE_MASK_DEFAULT"
             )
+
+
+def _seq(client):
+    """(command_id, subcommand_id) for each write, in call order."""
+    return [(c.args[1][0], c.args[1][3]) for c in client.write_gatt_char.await_args_list]
+
+
+class TestEnableMouseSequence:
+    """``enable_mouse`` must issue TWO writes in order: Set-Feature-Mask
+    (0x0C/0x02) THEN Enable-Features (0x0C/0x04), both carrying the 0xFF
+    mask. Per ble/protocol.py docstring (ndeadly + german77): without the
+    prior Set-Mask, the Enable subcommand is a no-op. This sequence is one
+    of the most-regressed protocol paths and was previously untested."""
+
+    def test_two_writes_in_correct_order(self, client, monkeypatch):
+        monkeypatch.setattr(proto.asyncio, "sleep", AsyncMock())
+        asyncio.run(proto.enable_mouse(client))
+        seq = _seq(client)
+        assert seq == [(0x0C, 0x02), (0x0C, 0x04)], (
+            "enable_mouse must Set-Feature-Mask (0x0C/0x02) before "
+            "Enable-Features (0x0C/0x04)"
+        )
+
+    def test_both_writes_carry_0xff_mask(self, client, monkeypatch):
+        monkeypatch.setattr(proto.asyncio, "sleep", AsyncMock())
+        asyncio.run(proto.enable_mouse(client))
+        for call in client.write_gatt_char.await_args_list:
+            payload = call.args[1]
+            assert payload[8] == 0xFF, "mask byte (payload[0]) must be 0xFF"
+            assert payload[5] == 4, "feature-select payload is 4 bytes"
+
+
+class TestSetLeds:
+    """``set_leds`` maps player slot → LED bit pattern and sends an 8-byte
+    payload. Player 2 → 0x03 (LEDs 1+2) is the Tier-S hardware-verified
+    pattern (ble/protocol.py:51,58-60)."""
+
+    def test_player_2_pattern_is_0x03_tier_s(self, client):
+        asyncio.run(proto.set_leds(client, 2))
+        payload = client.write_gatt_char.await_args.args[1]
+        assert payload[8] == 0x03, "Player 2 → LEDs 1+2 lit (0x03), hardware-verified"
+        assert payload[5] == 8, "LED payload length byte = 8"
+        assert len(payload) == 16, "8-byte header + 8-byte payload"
+
+    def test_cumulative_patterns_1_to_4(self, client):
+        for player, expected in [(1, 0x01), (2, 0x03), (3, 0x07), (4, 0x0F)]:
+            client.write_gatt_char.reset_mock()
+            asyncio.run(proto.set_leds(client, player))
+            assert client.write_gatt_char.await_args.args[1][8] == expected
+
+    def test_player_number_caps_at_8(self, client):
+        """Slots above 8 must not KeyError — they clamp to slot 8 (0x06)."""
+        asyncio.run(proto.set_leds(client, 99))
+        assert client.write_gatt_char.await_args.args[1][8] == 0x06
+
+
+class TestPostConnectSetupOrdering:
+    """CLAUDE.md §3 — ``post_connect_setup`` MUST send Bluetooth-Cancel
+    (0x03/0x02) before ``set_leds`` (0x09/0x07). Without it, reconnect via
+    the sync button leaves LEDs stuck in the pairing-cycle visual state
+    (ndeadly's documented firmware quirk). Previously untested."""
+
+    def test_cancel_advertising_precedes_set_leds(self, client, monkeypatch):
+        import ble.connection as conn
+
+        monkeypatch.setattr(conn.asyncio, "sleep", AsyncMock())
+
+        async def _noop(*a, **k):
+            return None
+
+        # request_throughput_optimized is imported inside the function, so
+        # patch it at its source module (no-op on macOS anyway).
+        monkeypatch.setattr("osio.boost.request_throughput_optimized", _noop)
+
+        player = MagicMock()
+        player.number = 1
+        asyncio.run(conn.post_connect_setup(client, player, vibrate=False))
+
+        seq = _seq(client)
+        cancel = (0x03, 0x02)  # COMMAND_INITIALISATION / BT_CANCEL_ADVERTISING
+        leds = (0x09, 0x07)    # COMMAND_LEDS / SET_PLAYER_LEDS
+        assert cancel in seq, "Bluetooth-Cancel must be sent"
+        assert leds in seq, "set_leds must be sent"
+        assert seq.index(cancel) < seq.index(leds), (
+            "Bluetooth-Cancel (0x03/0x02) must precede set_leds (0x09/0x07)"
+        )

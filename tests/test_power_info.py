@@ -47,16 +47,29 @@ def test_power_info_short_packet_skipped():
     assert state.battery_pct is None
 
 
-def test_power_info_throttle_blocks_repeats():
-    """The parser is throttled to 1 Hz — successive packets within
-    the throttle window must NOT update state, so the dashboard
-    doesn't churn at the BLE rate."""
+def test_power_info_throttle_blocks_then_releases(monkeypatch):
+    """The parser is throttled to 1 Hz — packets within the window must NOT
+    update state, but a packet AFTER the window must. Uses a controlled
+    clock (not wall-time) so the window boundary is pinned deterministically,
+    not left to flake on real elapsed time."""
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(parser.power_info.time, "monotonic", lambda: clock["t"])
+
     state = _MockState()
     parser.power_info.parse(state, _packet(5))
     first_pct = state.battery_pct
-    # Second packet immediately after — should be ignored by throttle.
+    assert first_pct is not None  # level 5 decoded
+
+    # 0.5 s later — inside the 1 Hz window → must be ignored.
+    clock["t"] = 1000.5
     parser.power_info.parse(state, _packet(9))
     assert state.battery_pct == first_pct
+
+    # 1.5 s after the first update — window elapsed → must update now.
+    clock["t"] = 1001.5
+    parser.power_info.parse(state, _packet(9))
+    assert state.battery_pct == 100   # level 9 → 100%
+    assert state.battery_pct != first_pct
 
 
 # ── Successful decode + level → pct mapping ─────────────────────────────

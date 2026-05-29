@@ -18,15 +18,40 @@ import parser.imu
 from parser.constants import IMU_BLOCK_LEN, IMU_OFFSET
 
 
-def test_imu_timestamp_hz_pinned_at_1_mhz():
-    """CLAUDE.md §4 (Tier S, hardware-verified): IMU timestamp ticks at
-    1 MHz (1 µs/tick). A 'correction' back to 50 kHz — the value cited
-    in github.com/german77/JoyconDriver#1 — would be a Tier-D regression
-    against measured BLE-on-macOS behaviour (Δts = 30000 across 30ms
-    packets = 1 MHz, not 50 kHz).
+def test_imu_timestamp_hz_matches_hardware_measurement():
+    """CLAUDE.md §4/§5 (Tier S): the IMU timestamp tick rate is pinned to
+    the *hardware observation*, not to an in-project literal. External
+    source of truth = the BLE-on-macOS capture: Δts = 30000 ticks measured
+    across a 30 ms (0.030 s) packet interval. The rate that implies is the
+    discriminating value — a regression to the 50 kHz figure cited in
+    github.com/german77/JoyconDriver#1 would fail this assertion.
     """
     from parser.constants import IMU_TIMESTAMP_HZ
-    assert IMU_TIMESTAMP_HZ == 1_000_000.0
+
+    # Hardware capture (external source of truth), NOT a chosen constant:
+    measured_delta_ticks = 30000
+    measured_delta_seconds = 0.030
+    hardware_rate_hz = measured_delta_ticks / measured_delta_seconds  # → 1_000_000
+
+    assert hardware_rate_hz == IMU_TIMESTAMP_HZ
+    assert IMU_TIMESTAMP_HZ != 50_000.0  # explicitly reject the german77 figure
+
+
+def test_imu_timestamp_round_trips_through_hz_to_seconds(monkeypatch):
+    """Behavioural pin: a parsed timestamp delta divided by the tick rate
+    must recover real elapsed seconds. Two packets 30000 ticks apart →
+    the measured 30 ms. Breaks if either the u32 decode or the Hz constant
+    drifts."""
+    from parser.constants import IMU_TIMESTAMP_HZ
+
+    monkeypatch.setitem(parser.imu.settings, "imu_enabled", True)
+    state_a, state_b = _MockState(), _MockState()
+    base_ts = 1_000_000
+    parser.imu.parse(state_a, _packet_with_imu(base_ts, 0, 0, 0, 0, 0, 0, 0))
+    parser.imu.parse(state_b, _packet_with_imu(base_ts + 30000, 0, 0, 0, 0, 0, 0, 0))
+
+    elapsed = (state_b.imu_timestamp - state_a.imu_timestamp) / IMU_TIMESTAMP_HZ
+    assert elapsed == 0.030
 
 
 class _MockState:

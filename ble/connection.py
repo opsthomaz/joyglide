@@ -20,6 +20,7 @@ have to re-issue the same ``enable_mouse`` + ``set_leds`` sequence as
 the initial connect — otherwise the cursor goes silently dead.
 """
 import asyncio
+import contextlib
 
 from bleak import BleakClient, BleakScanner
 
@@ -204,6 +205,15 @@ async def maintain_connection_loop(client, device, player, handler_func,
 
             command_queue.put({"type": "status_update", "data": {"connected": False, "text": f"Reconnecting {device.name or 'Joy-Con'}...", "color": "#f39c12"}})
             log.info(f"🔄 Reconnect attempt (retry_delay={retry_delay:.1f}s)…")
+
+            # Tidy up the previous (now-dead) client before replacing it so
+            # bleak's internal CoreBluetooth peripheral handle isn't leaked
+            # across many reconnect cycles. It's already disconnected at the
+            # BLE layer (that's what woke this loop), so the guard usually
+            # skips; best-effort and bounded like the except-branch cleanup.
+            with contextlib.suppress(Exception):
+                if client.is_connected:
+                    await asyncio.wait_for(client.disconnect(), timeout=2.0)
 
             # Recreate the client. Reusing a BleakClient across BT-stack
             # cycles on macOS leaves it in a state where connect()

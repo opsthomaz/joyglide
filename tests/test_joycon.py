@@ -428,12 +428,17 @@ class TestPacketRateEMA:
 
     def test_realistic_interval_pulls_ema(self, gamepad, monkeypatch):
         import joycon
-        # Seed
+        # Seed the EMA's _last_packet_ts; the seed value (0.030) is left
+        # untouched on the first call (no prior packet to diff against).
         monkeypatch.setattr(joycon.time, "monotonic", lambda: 0.0)
         gamepad.track_packet_rate()
-        # 30ms later (typical macOS BLE packet)
-        monkeypatch.setattr(joycon.time, "monotonic", lambda: 0.030)
+        seed = gamepad._ble_period_ema
+        assert seed == 0.030
+        # 15ms later — a plausible (Windows-rate) interval that is DISTINCT
+        # from the seed, so the EMA must actually move toward it. Feeding
+        # 30ms (the seed) would be a no-op and prove nothing.
+        monkeypatch.setattr(joycon.time, "monotonic", lambda: 0.015)
         gamepad.track_packet_rate()
-        # EMA should move toward 30ms (it starts at 30ms by default, so it
-        # might be steady — but never moves *away* from a plausible value).
-        assert 0.025 <= gamepad._ble_period_ema <= 0.035
+        # EMA = 0.85*0.030 + 0.15*0.015 = 0.02775 — pulled below the seed.
+        assert gamepad._ble_period_ema < seed
+        assert gamepad._ble_period_ema == pytest.approx(0.02775)

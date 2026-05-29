@@ -42,10 +42,13 @@ What this enables:
   * **Diagnostic verification** — set ``settings["imu_dump_raw"] =
     True`` to log raw + calibrated values per packet.
 
-Default OFF — opt-in via ``settings["imu_enabled"]``. When off, the
-FEATURE_IMU bit is dropped from the mask sent in ``ble.protocol
-.enable_mouse``, so the controller doesn't even compute / transmit
-the IMU bytes — saves controller-side battery on the optical-only path.
+Default OFF — opt-in via ``settings["imu_enabled"]``. The setting gates
+only whether *this parser runs*; it does NOT change the feature mask.
+``ble.protocol.enable_mouse`` always sends ``FEATURE_MASK_DEFAULT``
+(0xFF, IMU bit included) because hardware testing showed trimmed masks
+are silently rejected by the firmware (see ble/feature_flags.py). So the
+controller streams the IMU bytes either way; when the setting is off we
+just skip decoding them on the hot path.
 """
 import struct
 

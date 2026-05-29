@@ -14,6 +14,14 @@ OPT_LIFTOFF_OFFSET = 0x16  # u16 LE — "lift-off distance?" per ndeadly
 # (Gaming forces 0).
 OPT_DEADZONE = 2
 
+# ── Analog sticks — packed 12-bit, 3 bytes per side ─────────────────────
+# Left stick at bytes 10..12, right stick at 13..15 of input report 0x05.
+# Bit-unpacking lives in ``utils.unpack_stick_12bit`` (shared with
+# ``utils.decode_joystick``).
+STICK_LEFT_OFFSET  = 10
+STICK_RIGHT_OFFSET = 13
+STICK_BLOCK_LEN    = 3
+
 # ── Battery — bytes 0x1F..0x23 ──────────────────────────────────────────
 BATTERY_VOLTAGE_OFFSET = 0x1F  # u16 LE, mV
 BATTERY_CHARGE_OFFSET  = 0x21  # u8 — 0x00 = on battery, 0x20 = full,
@@ -29,9 +37,10 @@ BATTERY_CURRENT_DIVISOR = 100.0  # raw → mA scale factor
 
 # ── Motion Data (IMU) — bytes 0x2A..0x3B of input report 0x05 ──────────
 # 18-byte block, present when feature bit 2 (IMU) is enabled in the
-# feature mask. We add that bit to the mask only when
-# ``settings["imu_enabled"]`` is on (default False — keeps controller
-# battery use down for the optical-only path).
+# feature mask. The default mask is 0xFF (IMU bit always set — trimmed
+# masks are silently rejected by the firmware), so the controller emits
+# this block on every packet. ``settings["imu_enabled"]`` (default False)
+# only gates whether parser/imu.py decodes it, not whether it's sent.
 #
 # Layout (verified against research/ndeadly_switch2/hid_reports.md →
 # "Input Report 0x05" → "Motion Data" table):
@@ -53,12 +62,11 @@ BATTERY_CURRENT_DIVISOR = 100.0  # raw → mA scale factor
 # table). For multi-sample motion, input reports 0x07/0x08 carry a larger
 # block (size 0x28 = 40 bytes) but with "unknown packed format" — we
 # don't subscribe to those.
+# The parser decodes the whole block in one ``struct.unpack_from`` from
+# IMU_OFFSET (format "<Ih3h3h"), so only the block start + length are
+# needed in code; the per-field offsets above are documentation only.
 IMU_OFFSET           = 0x2A
 IMU_BLOCK_LEN        = 0x12   # 18 bytes total
-IMU_TIMESTAMP_OFFSET = 0x2A   # 4B u32 LE
-IMU_TEMP_OFFSET      = 0x2E   # 2B s16 LE
-IMU_ACCEL_OFFSET     = 0x30   # 6B = 3 s16 LE (X/Y/Z)
-IMU_GYRO_OFFSET      = 0x36   # 6B = 3 s16 LE (X/Y/Z)
 
 # IMU calibration scales. Sources:
 #

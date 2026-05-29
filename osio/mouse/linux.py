@@ -26,8 +26,6 @@ Public API matches ``osio.mouse.macos.InputSimulator`` /
   ``mouse_move``, ``mouse_down/up``, ``mouse_down_right/up_right``,
   ``mouse_double_click``, ``mouse_scroll`` + the ``refresh_rate`` field.
 """
-import time
-
 # evdev is a Linux-only optional dep, listed in requirements.txt with
 # `; sys_platform == 'linux'`. This module is only imported by
 # ``osio/mouse/__init__.py`` on Linux, so the import is unconditional —
@@ -117,11 +115,8 @@ class InputSimulator:
     """
 
     def __init__(self) -> None:
-        self._left_down  = False
-        self._right_down = False
         self._frac_dx = 0.0
         self._frac_dy = 0.0
-        self._last_click_time = 0.0
 
         try:
             self._ui = UInput(_CAPABILITIES,
@@ -167,26 +162,21 @@ class InputSimulator:
 
     def mouse_down(self) -> None:
         """Press the left mouse button."""
-        self._left_down = True
-        self._last_click_time = time.time()
         self._ui.write(e.EV_KEY, e.BTN_LEFT, 1)
         self._ui.syn()
 
     def mouse_up(self) -> None:
         """Release the left mouse button."""
-        self._left_down = False
         self._ui.write(e.EV_KEY, e.BTN_LEFT, 0)
         self._ui.syn()
 
     def mouse_down_right(self) -> None:
         """Press the right mouse button."""
-        self._right_down = True
         self._ui.write(e.EV_KEY, e.BTN_RIGHT, 1)
         self._ui.syn()
 
     def mouse_up_right(self) -> None:
         """Release the right mouse button."""
-        self._right_down = False
         self._ui.write(e.EV_KEY, e.BTN_RIGHT, 0)
         self._ui.syn()
 
