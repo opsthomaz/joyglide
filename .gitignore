@@ -37,6 +37,8 @@ desktop.ini
 # (project-level subagent definitions), but settings.local.json holds
 # the user's individual tool-permission grants and shouldn't ship.
 .claude/settings.local.json
+# Transient harness state (scheduled-wakeup lock, etc.) — per-session.
+.claude/scheduled_tasks.lock
 
 # Reference research clones — kept locally for offline reference but
 # bulky (~76MB) and redundant with the URL citations in ARCHITECTURE.md /
