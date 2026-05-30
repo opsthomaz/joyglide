@@ -37,7 +37,7 @@ py2app>=0.28.10;                             sys_platform == 'darwin'
 # library coffincolors/jc2mouse uses — well-tested, widely-shipped, no
 # transitive baggage. Membership in the `input` group + the standard udev
 # rule on /dev/uinput is the runtime requirement.
-evdev>=1.6.1; sys_platform == 'linux'
+evdev>=1.9.3; sys_platform == 'linux'
 
 # ── Build/packaging (cross-platform) ─────────────────────────────────────
 pyinstaller>=6.14.2
