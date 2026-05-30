@@ -21,7 +21,7 @@ yamllint>=1.35
 import-linter>=2.0
 hypothesis>=6.100
 pip-audit>=2.7
-mutmut>=3.0
+mutmut>=3.5.0
 # cosmic-ray covers the parser/ package where mutmut hits its package-import
 # wall — see packaging/run_cosmic_ray.sh for the workflow. Validated 100%
 # mutation score on parser/u16_delta.py.
