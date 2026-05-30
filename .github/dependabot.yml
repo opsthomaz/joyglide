@@ -1,39 +1,51 @@
 # Dependabot — automated PRs for outdated and vulnerable dependencies.
 # Combined with the "automated security fixes" feature enabled at the repo
 # level, vulnerable deps get patched automatically; non-security updates
-# come as PRs we can review and merge.
+# come grouped, monthly, to keep PR noise low.
+#
+# Cadence: monthly. Minor + patch updates are GROUPED (one PR for runtime
+# deps, one for dev tooling, one for GitHub Actions) so a normal month is
+# 1–3 PRs instead of one-per-dependency. Major bumps still arrive as
+# individual PRs so they get vetted — and they are deliberately excluded
+# from the auto-merge workflow (.github/workflows/dependabot-auto-merge.yml).
 #
 # Docs: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates
 
 version: 2
 updates:
-  # ── Python deps (requirements.txt) ──────────────────────────────────────
+  # ── Python deps (requirements.txt + requirements-dev.txt) ────────────────
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "06:00"
       timezone: "Etc/UTC"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "python"
-    # Group minor + patch updates into a single PR per week to reduce noise.
-    # Major updates still come as individual PRs so we can vet them.
     groups:
-      python-minor-and-patch:
+      # Runtime deps — higher stakes, kept in their own grouped PR.
+      python-production:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+      # Dev/CI tooling (ruff, pyright, bandit, mutmut, …) — one grouped PR.
+      python-development:
+        dependency-type: "development"
         update-types: ["minor", "patch"]
 
   # ── GitHub Actions ──────────────────────────────────────────────────────
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "06:00"
       timezone: "Etc/UTC"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "github-actions"
+    groups:
+      # All minor+patch action bumps in a single PR.
+      github-actions:
+        update-types: ["minor", "patch"]
