@@ -15,7 +15,7 @@ customtkinter>=5.2.2
 
 # ── macOS only ───────────────────────────────────────────────────────────
 pyobjc-framework-Quartz>=10.0;              sys_platform == 'darwin'
-pyobjc-framework-Cocoa>=10.0;               sys_platform == 'darwin'
+pyobjc-framework-Cocoa>=12.2.1;               sys_platform == 'darwin'
 # AXIsProcessTrustedWithOptions for the Accessibility prompt; without this
 # wheel the call in mouse_macos.request_accessibility silently no-ops on
 # a fresh install (the bare except swallows the ModuleNotFoundError).
