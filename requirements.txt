@@ -40,4 +40,4 @@ py2app>=0.28.10;                             sys_platform == 'darwin'
 evdev>=1.9.3; sys_platform == 'linux'
 
 # ── Build/packaging (cross-platform) ─────────────────────────────────────
-pyinstaller>=6.14.2
+pyinstaller>=6.21.0
