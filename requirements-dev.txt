@@ -25,7 +25,7 @@ mutmut>=3.5.0
 # cosmic-ray covers the parser/ package where mutmut hits its package-import
 # wall — see packaging/run_cosmic_ray.sh for the workflow. Validated 100%
 # mutation score on parser/u16_delta.py.
-cosmic-ray>=8.4
+cosmic-ray>=8.4.6
 cohesion>=1.2
 
 # Pre-commit hooks (optional — `pre-commit install` to enable)
