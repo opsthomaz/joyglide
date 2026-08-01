@@ -20,7 +20,7 @@ codespell>=2.4.2
 yamllint>=1.38.0
 import-linter>=2.0
 hypothesis>=6.155.7
-pip-audit>=2.7
+pip-audit>=2.10.1
 mutmut>=3.5.0
 # cosmic-ray covers the parser/ package where mutmut hits its package-import
 # wall — see packaging/run_cosmic_ray.sh for the workflow. Validated 100%
