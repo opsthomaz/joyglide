@@ -267,8 +267,9 @@ and turns its optical sensor into a native desktop mouse.
 - **Multi-controller support** — pair multiple Joy-Cons at once, each
   with its own dashboard row; switch a controller between left and
   right at runtime without disconnecting.
-- **Button-click mapping** — `L`/`ZL` = left click, `R`/`ZR` = right
-  click; rapid press within 400ms triggers double-click.
+- **Button-click mapping** — shoulder `L`/`R` = left click, trigger
+  `ZL`/`ZR` = right click; rapid press within 400ms triggers
+  double-click. (Earlier wording of this entry had the pairs crossed.)
 - **Analog-stick scroll** — cubic curve in Dynamic/Cinematic, linear
   in Gaming.
 - **Adaptive BLE-rate drain** — pump auto-adjusts to whatever rate
