@@ -106,10 +106,13 @@ async def write_command(client, command_id: int, subcommand_id: int, data: bytes
     requires; we send them verbatim.
     """
     header = bytes([command_id, 0x91, 0x01, subcommand_id, 0x00, len(data), 0x00, 0x00])
-    # The command characteristic is write-without-response (ndeadly
-    # bluetooth_interface.md). Say so explicitly rather than relying on
-    # bleak's ``response=None`` auto-detection.
-    await client.write_gatt_char(WRITE_COMMAND_UUID, header + data, response=False)
+    # Write mode is left to bleak (``response=None``): it picks
+    # write-without-response only if the characteristic advertises it.
+    # Our GATT dump shows ``649d4ac9`` as ``[write]`` (with response), so
+    # forcing ``response=False`` would request a mode the peripheral
+    # doesn't advertise. Commands are only sent at setup, so the extra
+    # ATT round-trip is irrelevant.
+    await client.write_gatt_char(WRITE_COMMAND_UUID, header + data)
 
 
 async def cancel_bluetooth_advertising(client) -> None:

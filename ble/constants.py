@@ -46,7 +46,9 @@ INPUT_REPORT_JCL_UUID = "cc1bbbb5-7354-4d32-a716-a81cb241a32a"
 INPUT_REPORT_JCR_UUID = "d5a9e01e-2ffc-4cca-b20c-8b67142bf442"
 
 # Command channel — host writes here to enable features, set LEDs, trigger
-# vibration, etc. Always write-without-response.
+# vibration, etc. Advertises ``write`` (with response) in our GATT dump —
+# see docs/ARCHITECTURE.md "GATT Profile"; bleak picks the write mode
+# from the advertised properties.
 WRITE_COMMAND_UUID = "649d4ac9-8eb7-4e6c-af44-1ea54fe5f005"
 
 # ── Command IDs (high-level command catalog) ────────────────────────────

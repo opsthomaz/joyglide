@@ -63,7 +63,6 @@ gates green (261 tests, ruff / pyright / mypy / import-linter / xenon).
   address) so bleak's CoreBluetooth backend reuses the discovered
   peripheral instead of re-scanning; `scan_device` surfaces bleak ≥2's
   `BleakBluetoothNotAvailableError` as a user-visible status.
-- `write_command` passes `response=False` explicitly.
 - Removed `gc.collect()` from `Player.__init__` / `disconnect` — a full
   GC pass there stalls every other controller's pump for milliseconds.
 - `LSMinimumSystemVersion` 10.15 → 11.0 (arm64-only binary; no Apple
