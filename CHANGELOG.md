@@ -4,7 +4,7 @@ All notable changes to Joyglide are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.4] — 2026-08-29
 
 ### Added
 
@@ -16,6 +16,11 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   R = right / ZR = left can be set in two steps without an intermediate
   no-left-click layout); Apply warns if a side has no click at all.
   Invalid hand-edited entries reset per button on load. 12 tests.
+
+### Verified (Tier S — hardware, 2026-08-29)
+
+- Button remap + Apply flow, Sync recovery, and trackpad / Joy-Con stick
+  scrolling in the app all confirmed on the JC2-R under macOS 26.6.2.
 
 ### Fixed
 
@@ -338,6 +343,7 @@ Joyglide descends from prior reverse-engineering work — most directly
 [moutella/joycon2mouse](https://github.com/moutella/joycon2mouse). See
 `NOTICE` for full attribution.
 
+[0.1.4]: https://github.com/opsthomaz/joyglide/releases/tag/v0.1.4
 [0.1.3]: https://github.com/opsthomaz/joyglide/releases/tag/v0.1.3
 [0.1.2]: https://github.com/opsthomaz/joyglide/releases/tag/v0.1.2
 [0.1.0]: https://github.com/opsthomaz/joyglide/releases/tag/v0.1.0
