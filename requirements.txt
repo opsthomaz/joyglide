@@ -7,7 +7,7 @@
 # matching lines for the current OS get installed.
 
 # ── Core (cross-platform) ────────────────────────────────────────────────
-bleak>=1.0.1
+bleak>=3.0.2
 pillow>=12.2.0
 pystray>=0.19.5
 platformdirs>=4.9.6
