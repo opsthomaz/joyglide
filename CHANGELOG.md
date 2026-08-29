@@ -8,7 +8,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 Full-codebase audit (2026-08-29): line-by-line review, re-verification of
 every upstream protocol source, and a macOS 26 / toolchain refresh. All
-gates green (261 tests, ruff / pyright / mypy / import-linter / xenon).
+gates green (268 tests, ruff / pyright / mypy / import-linter / xenon).
 
 ### Fixed
 
