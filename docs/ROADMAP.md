@@ -15,7 +15,7 @@ The Linux backends already ship in v0.1.0:
 - `osio/hotkey/linux.py` — global hotkey via evdev
 - `osio/boost.py` — Linux branch using `hcitool lecup` for connection
   parameter override
-- `requirements.txt` already declares `evdev>=1.6.1; sys_platform == 'linux'`
+- `requirements.txt` already declares `evdev>=1.9.3; sys_platform == 'linux'`
 
 What's missing is **hardware confirmation on a real Linux desktop with
 a real Joy-Con 2**. The code is integrated but unverified, so Linux is

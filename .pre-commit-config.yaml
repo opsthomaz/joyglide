@@ -14,9 +14,11 @@ repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.13
     hooks:
+      # No ruff-format hook on purpose: the codebase uses manual column
+      # alignment (constants tables, ctypes structs) that ruff-format would
+      # rewrite wholesale. CI only runs `ruff check`, so keep parity here.
       - id: ruff
         args: [--fix]
-      - id: ruff-format
 
   # mypy — same config as CI.
   - repo: https://github.com/pre-commit/mirrors-mypy
