@@ -17,6 +17,7 @@ existing callers (``solo_logic.handle_single_notification``, the test
 suite) keep working unchanged.
 """
 import asyncio
+import contextvars
 import time
 
 from osio.mouse import InputSimulator
@@ -160,7 +161,12 @@ class JoyCon:
         except RuntimeError:
             return
         self._pump_running = True
-        self._pump_task = loop.create_task(motion_pump(self))
+        # Fresh context: start_pump is called from inside the BLE
+        # notification callback, and create_task would otherwise copy that
+        # callback's contextvars — including latency_trace's t0 — into the
+        # pump, whose first CGEventPost then records a bogus multi-second
+        # "internal_us" sample (6.15 s observed on 2026-08-29).
+        self._pump_task = loop.create_task(motion_pump(self), context=contextvars.Context())
         self._pump_task.add_done_callback(self._on_pump_done)
 
     def track_packet_rate(self) -> None:

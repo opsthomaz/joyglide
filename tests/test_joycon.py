@@ -442,3 +442,31 @@ class TestPacketRateEMA:
         # EMA = 0.85*0.030 + 0.15*0.015 = 0.02775 — pulled below the seed.
         assert gamepad._ble_period_ema < seed
         assert gamepad._ble_period_ema == pytest.approx(0.02775)
+
+
+# ── pump task context isolation ──────────────────────────────────────────
+#
+# latency_trace.bleak_callback_start_ns is set inside the BLE callback.
+# asyncio.create_task() copies the *current* context into the new task,
+# so a pump started from inside a callback inherits that t0 and its first
+# CGEventPost records a bogus multi-second "internal_us" sample (6.15 s
+# observed on 2026-08-29). The pump must start with a fresh context.
+
+def test_start_pump_does_not_inherit_ble_callback_timestamp():
+    import asyncio
+    import latency_trace
+    from joycon import JoyCon
+
+    async def _run():
+        jc = JoyCon.__new__(JoyCon)          # skip InputSimulator (needs a display)
+        jc._pump_running = False
+        jc._pump_task = None
+        latency_trace.bleak_callback_start_ns.set(123456789)
+        jc.start_pump()
+        task = jc._pump_task
+        ctx_value = task.get_context().run(latency_trace.bleak_callback_start_ns.get)
+        task.cancel()
+        latency_trace.bleak_callback_start_ns.set(0)
+        return ctx_value
+
+    assert asyncio.run(_run()) == 0

@@ -27,6 +27,13 @@ PUMP_IDLE_BRAKE_CINEMATIC = 0.65
 # spikes from the optical sensor or a BLE backlog after a stall.
 PUMP_MAX_PER_TICK = 200
 
+# Accumulator magnitude (pixels) below which idle decay snaps to exactly
+# 0.0. The idle brake shrinks the accumulator geometrically but never
+# reaches zero on its own — hardware capture (2026-08-29) showed the pump
+# posting 60 zero-pixel CGEvents/s for ~10 s after every stop, until float
+# underflow. 1/20 px is far below anything a display can show.
+PUMP_SETTLE_PX = 0.05
+
 # Default BLE inter-packet period when the EMA hasn't converged yet (or is
 # pathologically small). 30ms ≈ macOS floor, the more conservative of the
 # two real platforms — picking the slow one avoids a momentary "drains too
@@ -72,3 +79,14 @@ def idle_brake(profile: str) -> float:
     converges to zero.
     """
     return PUMP_IDLE_BRAKE_CINEMATIC if profile == "cinematic" else PUMP_IDLE_BRAKE_DEFAULT
+
+
+def settle_accumulator(value: float) -> float:
+    """Snap a sub-visible accumulator value to exactly ``0.0``.
+
+    Applied after the idle brake each tick so a stopped controller stops
+    producing events within a few ticks instead of emitting a ~10 s tail
+    of zero-pixel moves. Values at or above ``PUMP_SETTLE_PX`` in
+    magnitude pass through unchanged.
+    """
+    return 0.0 if -PUMP_SETTLE_PX < value < PUMP_SETTLE_PX else value

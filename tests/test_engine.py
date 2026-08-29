@@ -238,3 +238,40 @@ def test_max_per_tick_clamp_passthrough_when_in_bounds():
     assert max(-PUMP_MAX_PER_TICK, min(PUMP_MAX_PER_TICK, -0.5)) == -0.5
     assert max(-PUMP_MAX_PER_TICK, min(PUMP_MAX_PER_TICK, PUMP_MAX_PER_TICK)) == PUMP_MAX_PER_TICK
     assert max(-PUMP_MAX_PER_TICK, min(PUMP_MAX_PER_TICK, -PUMP_MAX_PER_TICK)) == -PUMP_MAX_PER_TICK
+
+
+# ── settle_accumulator ────────────────────────────────────────────────────
+#
+# Hardware observation (2026-08-29, JC2-R, macOS 26.6): after the
+# controller stops, the pump kept posting 60 zero-pixel CGEvents per
+# second for ~10 s — the idle brake multiplies the accumulator by 0.30
+# per tick, which shrinks it geometrically but never reaches 0.0 until
+# float underflow. Anything below a small fraction of a pixel is
+# invisible and must snap to exactly zero so the pump goes quiet.
+
+from engine.tuning import PUMP_SETTLE_PX, settle_accumulator  # noqa: E402
+
+
+@given(value=st.floats(min_value=-PUMP_SETTLE_PX, max_value=PUMP_SETTLE_PX,
+                       allow_nan=False, exclude_min=True, exclude_max=True))
+def test_settle_snaps_sub_threshold_to_exact_zero(value: float):
+    assert settle_accumulator(value) == 0.0
+
+
+@given(value=st.floats(min_value=PUMP_SETTLE_PX, max_value=1e6, allow_nan=False))
+def test_settle_passes_through_visible_motion(value: float):
+    assert settle_accumulator(value) == value
+    assert settle_accumulator(-value) == -value
+
+
+@given(initial=st.floats(min_value=-1000.0, max_value=1000.0, allow_nan=False),
+       profile=PROFILES)
+def test_braked_accumulator_reaches_exact_zero_within_a_second(initial: float, profile: str):
+    """Brake + settle must reach 0.0 (not merely 'tiny') within 60 ticks,
+    so an idle controller stops generating events within one second."""
+    acc = initial
+    for _ in range(60):
+        acc = settle_accumulator(acc * idle_brake(profile))
+        if acc == 0.0:
+            return
+    raise AssertionError(f"accumulator never settled: {acc!r}")

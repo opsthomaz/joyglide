@@ -19,6 +19,7 @@ from engine.tuning import (
     PUMP_MAX_PER_TICK,
     drain_factor,
     idle_brake,
+    settle_accumulator,
 )
 from user_preferences import settings
 
@@ -61,10 +62,13 @@ async def motion_pump(state) -> None:
         idle = (time.monotonic() - state._last_motion_ts) > PUMP_IDLE_CUTOFF
         if idle:
             brake = idle_brake(profile)
-            state._dx_accum *= brake
-            state._dy_accum *= brake
-            state._scroll_x_accum *= brake
-            state._scroll_y_accum *= brake
+            # Snap sub-visible remainders to exactly 0.0 so the pump goes
+            # quiet — otherwise the geometric decay keeps ``dx != 0.0``
+            # true (and a CGEvent posted) every tick for ~10 s per stop.
+            state._dx_accum = settle_accumulator(state._dx_accum * brake)
+            state._dy_accum = settle_accumulator(state._dy_accum * brake)
+            state._scroll_x_accum = settle_accumulator(state._scroll_x_accum * brake)
+            state._scroll_y_accum = settle_accumulator(state._scroll_y_accum * brake)
 
         # Per-profile drain factor — pure, see engine.tuning.drain_factor.
         # Gaming = 1.0 (full drain), cinematic = 0.25 (slow inertia),
