@@ -19,6 +19,12 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Lists in the app could not be scrolled with the trackpad or the
+  Joy-Con stick** on Python builds linked against Tk 9 (Homebrew
+  python-tk, python.org 3.14.5+): Tk 9 on macOS delivers continuous
+  scrolling as `<TouchpadScroll>`, which customtkinter's
+  `CTkScrollableFrame` ignores (customtkinter #2858). The three
+  scrollable frames now bind it and scroll 1:1 by pixel delta.
 - **Sync could get stuck on "Connecting…" forever** with the controller
   no longer blinking and every further Sync press ignored. Root cause:
   bleak 3.0.2's CoreBluetooth `connect`, after its own timeout, awaits

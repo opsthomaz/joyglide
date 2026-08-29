@@ -53,6 +53,24 @@ def decode_joystick(data: bytes) -> tuple[int, int]:
         return 0, 0
 
 
+def unpack_touchpad_delta(packed: int) -> tuple[int, int]:
+    """Decode Tk 9's ``<TouchpadScroll>`` ``%D`` value into ``(dx, dy)``.
+
+    Tk packs two signed 16-bit deltas: X in the high 16 bits, Y in the
+    low 16 bits (Tk 9 ``bind(n)``; ``tk::PreciseScrollDeltas`` is the Tcl
+    equivalent). Tk may hand Python the 32-bit word as a negative int
+    when the X delta is negative, hence the ``& 0xFFFFFFFF`` first.
+    """
+    word = packed & 0xFFFFFFFF
+    dx = (word >> 16) & 0xFFFF
+    dy = word & 0xFFFF
+    if dx >= 0x8000:
+        dx -= 0x10000
+    if dy >= 0x8000:
+        dy -= 0x10000
+    return dx, dy
+
+
 def resource_path(relative_path: str) -> str:
     """Resolve a path bundled with the app, on dev or any frozen build.
 

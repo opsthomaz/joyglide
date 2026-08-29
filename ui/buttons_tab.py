@@ -2,6 +2,8 @@
 """Buttons tab — per-button action mapping (``settings["button_map"]``)."""
 import customtkinter as ctk
 
+from ui._shared import enable_touchpad_scroll
+
 from user_preferences import (
     BUTTON_ACTIONS,
     DEFAULT_BUTTON_MAP,
@@ -56,6 +58,7 @@ class ButtonsMixin:
         scroll = ctk.CTkScrollableFrame(tab)
         scroll.grid(row=0, column=0, sticky="nsew", padx=4)
         scroll.grid_columnconfigure(1, weight=1)
+        enable_touchpad_scroll(scroll)
 
         ctk.CTkLabel(scroll, text="Button mapping",
                      font=("Helvetica", 15, "bold")).grid(

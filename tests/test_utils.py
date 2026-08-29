@@ -134,3 +134,32 @@ class TestResourcePath:
         # the trailing separator).
         expected = os.path.dirname(os.path.abspath(utils.__file__)) + os.sep
         assert result == expected
+
+
+class TestUnpackTouchpadDelta:
+    """Tk 9 ``<TouchpadScroll>`` packs two signed 16-bit deltas into ``%D``:
+    X in the high 16 bits, Y in the low 16 bits (Tk 9 bind(n), "These
+    events store two 16 bit delta values..."). CTkScrollableFrame only
+    binds ``<MouseWheel>``, which Tk 9 on macOS no longer sends for
+    trackpad / continuous scrolling — so the app's lists could only be
+    scrolled by dragging the bar."""
+
+    def test_positive_pair(self):
+        from utils import unpack_touchpad_delta
+        assert unpack_touchpad_delta((3 << 16) | 7) == (3, 7)
+
+    def test_negative_y_is_sign_extended(self):
+        from utils import unpack_touchpad_delta
+        assert unpack_touchpad_delta((0 << 16) | (0xFFFF & -5)) == (0, -5)
+
+    def test_negative_x_is_sign_extended(self):
+        from utils import unpack_touchpad_delta
+        packed = ((-2 & 0xFFFF) << 16) | (12 & 0xFFFF)
+        assert unpack_touchpad_delta(packed) == (-2, 12)
+
+    def test_negative_packed_int_from_tk(self):
+        """Tk hands Python a signed 32-bit int when the X delta is negative."""
+        from utils import unpack_touchpad_delta
+        packed = ((-2 & 0xFFFF) << 16) | (12 & 0xFFFF)
+        signed32 = packed - (1 << 32)
+        assert unpack_touchpad_delta(signed32) == (-2, 12)

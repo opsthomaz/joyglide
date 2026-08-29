@@ -4,6 +4,8 @@ import contextlib
 
 import customtkinter as ctk
 
+from ui._shared import enable_touchpad_scroll
+
 
 class DashboardMixin:
     """Adds dashboard-tab construction + refresh logic to ``JoyglideUI``.
@@ -31,6 +33,7 @@ class DashboardMixin:
         self.controllers_frame = ctk.CTkScrollableFrame(tab, label_text="Controllers")
         self.controllers_frame.grid(row=1, column=0, sticky="nsew", padx=20, pady=8)
         self.controllers_frame.grid_columnconfigure(0, weight=1)
+        enable_touchpad_scroll(self.controllers_frame)
 
         self.sync_button = ctk.CTkButton(tab, text="+ Sync New Controller",
                                           font=("Helvetica", 14, "bold"),

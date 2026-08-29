@@ -8,7 +8,7 @@ import contextlib
 
 import customtkinter as ctk
 
-from ui._shared import add_divider
+from ui._shared import add_divider, enable_touchpad_scroll
 from user_preferences import save_settings, settings
 
 
@@ -35,6 +35,7 @@ class PerformanceMixin:
         scroll = ctk.CTkScrollableFrame(tab)
         scroll.grid(row=0, column=0, sticky="nsew", padx=4)
         scroll.grid_columnconfigure(0, weight=1)
+        enable_touchpad_scroll(scroll)
         tab.grid_rowconfigure(0, weight=1)
 
         row = 0
