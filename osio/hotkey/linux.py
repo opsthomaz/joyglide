@@ -17,6 +17,7 @@ If no keyboard nodes are readable, ``install_pause_hotkey`` falls back
 to a clear warning and runs without a hotkey — same behaviour as a
 misconfigured macOS Accessibility permission.
 """
+import os
 import threading
 
 # evdev is a Linux-only dep (requirements.txt with `; sys_platform ==
@@ -100,6 +101,6 @@ def install_pause_hotkey(callback) -> None:
 
     for d in devices:
         t = threading.Thread(target=watch, args=(d,), daemon=True,
-                              name=f"jc2m-hotkey-{d.path}")
+                              name=f"jc2m-hotkey-{os.fsdecode(d.path)}")
         t.start()
     log.info(f"⌨️  Global hotkey Ctrl+Alt+M registered on {len(devices)} keyboard(s).")
