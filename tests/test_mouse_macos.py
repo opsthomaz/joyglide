@@ -61,3 +61,40 @@ class TestInputSimulatorMoveDeltas:
         sim.mouse_move(4.0, -3.0)
         (_args, kwargs), = calls
         assert kwargs["delta"] == (4.0, -3.0)
+
+
+class TestClampStaysInsideRealCursorBounds:
+    """macOS bounds a *real* pointer to ``[0, size − 1/64]`` per axis
+    (``CGWarpMouseCursorPosition(300, 99999)`` → y = 1111.984375 on a
+    1112-pt display, measured 2026-08-29 on macOS 26.6) but accepts
+    posted HID events at any coordinate. Clamping to ``size`` exactly
+    parked our cursor 1 pt outside the valid range, where the Dock's
+    edge trigger fires but its "cursor inside me?" hit-test fails —
+    the auto-hidden Dock flickered up/down while the user pushed the
+    Joy-Con against the bottom edge.
+    """
+
+    def _sim(self):
+        sim = m.InputSimulator.__new__(m.InputSimulator)
+        sim._sw, sim._sh = 1710.0, 1112.0
+        return sim
+
+    def test_bottom_edge_clamps_to_height_minus_one_64th(self):
+        sim = self._sim(); sim._cx, sim._cy = 300.0, 5000.0
+        sim._clamp()
+        assert sim._cy == pytest.approx(1112.0 - 1 / 64)
+
+    def test_right_edge_clamps_to_width_minus_one_64th(self):
+        sim = self._sim(); sim._cx, sim._cy = 5000.0, 300.0
+        sim._clamp()
+        assert sim._cx == pytest.approx(1710.0 - 1 / 64)
+
+    def test_origin_clamps_to_zero(self):
+        sim = self._sim(); sim._cx, sim._cy = -40.0, -40.0
+        sim._clamp()
+        assert (sim._cx, sim._cy) == (0.0, 0.0)
+
+    def test_interior_position_untouched(self):
+        sim = self._sim(); sim._cx, sim._cy = 123.4, 567.8
+        sim._clamp()
+        assert (sim._cx, sim._cy) == (123.4, 567.8)

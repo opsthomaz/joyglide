@@ -81,6 +81,10 @@ def _screen_bounds():
     return width, height, refresh_rate
 
 
+# Distance (points) inside the far screen edge at which macOS stops a real
+# pointer — see ``InputSimulator._clamp``.
+_EDGE_INSET = 1.0 / 64
+
 _MOVE_EVENT_TYPES = (CG.kCGEventMouseMoved,
                      CG.kCGEventLeftMouseDragged,
                      CG.kCGEventRightMouseDragged,
@@ -257,11 +261,24 @@ class InputSimulator:
     def _clamp(self) -> None:
         """Pin the cached cursor to the screen rectangle so motion past
         the edge doesn't accumulate off-screen position that would have
-        to be 'undone' before the cursor visibly responds again."""
+        to be 'undone' before the cursor visibly responds again.
+
+        The far edge is ``size − 1/64``, not ``size``: that is where
+        macOS itself stops a real pointer (``CGWarpMouseCursorPosition``
+        to y=99999 lands at 1111.984375 on a 1112-pt display — measured
+        on macOS 26.6), whereas posted HID events are accepted at any
+        coordinate. Parking at exactly ``size`` left the cursor 1 pt
+        outside the valid range: the auto-hidden Dock's edge trigger
+        fired, but its "is the cursor inside me?" hit-test failed, so
+        the Dock flickered up and down while the user pushed against
+        the bottom edge.
+        """
+        max_x = self._sw - _EDGE_INSET
+        max_y = self._sh - _EDGE_INSET
         if self._cx < 0.0: self._cx = 0.0
-        elif self._cx > self._sw: self._cx = self._sw
+        elif self._cx > max_x: self._cx = max_x
         if self._cy < 0.0: self._cy = 0.0
-        elif self._cy > self._sh: self._cy = self._sh
+        elif self._cy > max_y: self._cy = max_y
 
     def mouse_move(self, dx: float, dy: float) -> None:
         """Apply a sub-pixel relative motion. If a button is held, emits a
