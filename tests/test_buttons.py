@@ -15,8 +15,21 @@ Cross-references:
 """
 from unittest.mock import MagicMock
 
+import pytest
+
 import parser.buttons
 from parser.button_masks import MASKS
+from user_preferences import DEFAULT_BUTTON_MAP
+
+
+@pytest.fixture(autouse=True)
+def _default_layout(monkeypatch):
+    """Pin the documented layout for every test in this module. The parser
+    reads the live ``settings`` dict, which is loaded from the developer's
+    own settings.json — without this, a remapped button on the dev machine
+    would fail unrelated tests."""
+    monkeypatch.setitem(parser.buttons.settings, "button_map", dict(DEFAULT_BUTTON_MAP))
+    monkeypatch.setitem(parser.buttons.settings, "swap_click_buttons", False)
 
 
 def _state(side: str = "right"):

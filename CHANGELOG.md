@@ -12,7 +12,10 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   L, R, ZL, ZR, stick press, A, Y and D-pad ←/→ can each be set to
   left / right / middle click, back, forward, or nothing. Defaults are
   unchanged; "Swap click buttons" still flips left↔right on top of the
-  map. Invalid hand-edited entries reset per button on load. 8 tests.
+  map. Menus edit a pending layout that goes live on **Apply** (so
+  R = right / ZR = left can be set in two steps without an intermediate
+  no-left-click layout); Apply warns if a side has no click at all.
+  Invalid hand-edited entries reset per button on load. 12 tests.
 
 ### Fixed
 

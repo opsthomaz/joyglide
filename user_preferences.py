@@ -46,6 +46,18 @@ DEFAULT_BUTTON_MAP = {
 }
 BUTTON_ACTIONS = ("left", "right", "middle", "back", "forward", "none")
 
+# Buttons that live on the same physical Joy-Con (STICK exists on both
+# and is not counted). Used by the Buttons tab to warn when a side has
+# no click at all after an Apply.
+BUTTON_SIDES = {"left": ("L", "ZL", "LEFT", "RIGHT"), "right": ("R", "ZR", "A", "Y")}
+
+
+def sides_without_click(button_map: dict) -> list[str]:
+    """Names of Joy-Con sides whose buttons include neither a left nor a
+    right click. Empty list means every side can still click."""
+    return [side for side, buttons in BUTTON_SIDES.items()
+            if not any(button_map.get(b) in ("left", "right") for b in buttons)]
+
 
 # Default values for every setting we know about. Acts as both the initial
 # config when settings.json doesn't exist yet and as a migration source

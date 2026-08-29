@@ -130,3 +130,29 @@ class TestButtonMapValidation:
         from user_preferences import DEFAULT_BUTTON_MAP, DEFAULTS
         assert DEFAULTS["button_map"] == DEFAULT_BUTTON_MAP
         assert DEFAULTS["button_map"] is not DEFAULT_BUTTON_MAP
+
+
+
+class TestSidesWithoutClick:
+    """The Buttons tab warns on Apply when a Joy-Con side is left with
+    neither a left nor a right click — the user can still do it, but not
+    by accident."""
+
+    def test_default_map_has_clicks_on_both_sides(self):
+        from user_preferences import DEFAULT_BUTTON_MAP, sides_without_click
+        assert sides_without_click(DEFAULT_BUTTON_MAP) == []
+
+    def test_right_side_without_any_click_is_reported(self):
+        from user_preferences import DEFAULT_BUTTON_MAP, sides_without_click
+        m = {**DEFAULT_BUTTON_MAP, "R": "middle", "ZR": "back"}
+        assert sides_without_click(m) == ["right"]
+
+    def test_one_click_kind_is_enough(self):
+        from user_preferences import DEFAULT_BUTTON_MAP, sides_without_click
+        m = {**DEFAULT_BUTTON_MAP, "R": "right"}      # two right clicks, no left
+        assert sides_without_click(m) == []
+
+    def test_both_sides_reported_in_order(self):
+        from user_preferences import DEFAULT_BUTTON_MAP, sides_without_click
+        m = {**DEFAULT_BUTTON_MAP, "L": "none", "ZL": "none", "R": "none", "ZR": "none"}
+        assert sides_without_click(m) == ["left", "right"]
