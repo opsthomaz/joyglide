@@ -93,6 +93,8 @@ gates green (268 tests, ruff / pyright / mypy / import-linter / xenon).
   (previously a 6.15 s outlier); `cgevent_us` p50 ≈ 90 µs, unchanged
   from the May baseline.
 - Dock edge behaviour: auto-hidden Dock now reveals and stays.
+- `swap_click_buttons` toggled live in Settings: R/ZR roles swapped and
+  restored as expected.
 
 ### Research (2026-08-29 source re-verification)
 
