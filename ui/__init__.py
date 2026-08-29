@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """CustomTkinter UI for Joyglide — composed of three tab mixins.
 
-Three tabs:
+Four tabs:
   * **Dashboard** (``ui.dashboard.DashboardMixin``) — list of currently
     connected controllers with battery, side, and per-row Disconnect /
     Switch Side buttons. Refreshes every 1 second to pick up battery
@@ -9,6 +9,8 @@ Three tabs:
   * **Performance** (``ui.performance.PerformanceMixin``) — motion
     profile selector (Dynamic / Gaming / Cinematic), sensitivity /
     deadzone / acceleration sliders, scroll speed.
+  * **Buttons** (``ui.buttons_tab.ButtonsMixin``) — per-button action
+    mapping (left / right / middle / back / forward / nothing).
   * **Settings** (``ui.settings_tab.SettingsMixin``) — startup behaviour
     (auto-sync, start minimised), input options (double-click), hardware
     (vibration on connect, GATT dump), reset.
@@ -24,6 +26,7 @@ import queue
 
 import customtkinter as ctk
 
+from ui.buttons_tab import ButtonsMixin
 from ui.dashboard import DashboardMixin
 from ui.modals import accessibility as modal_accessibility
 from ui.modals import joy_select as modal_joy_select
@@ -31,7 +34,7 @@ from ui.performance import PerformanceMixin
 from ui.settings_tab import SettingsMixin
 
 
-class JoyglideUI(DashboardMixin, PerformanceMixin, SettingsMixin, ctk.CTk):
+class JoyglideUI(DashboardMixin, PerformanceMixin, ButtonsMixin, SettingsMixin, ctk.CTk):
     def __init__(self, command_queue, tray_connect_func,
                  players_ref=None, disconnect_fn=None, switch_side_fn=None):
         super().__init__()
@@ -59,10 +62,12 @@ class JoyglideUI(DashboardMixin, PerformanceMixin, SettingsMixin, ctk.CTk):
 
         self.tabview.add("Dashboard")
         self.tabview.add("Performance")
+        self.tabview.add("Buttons")
         self.tabview.add("Settings")
 
         self.setup_dashboard()
         self.setup_performance()
+        self.setup_buttons()
         self.setup_settings()
 
         self.after(100, self.process_queue)

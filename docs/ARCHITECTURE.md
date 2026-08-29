@@ -528,6 +528,7 @@ All settings persisted to JSON via `platformdirs` (macOS: `~/Library/Application
 | `acceleration_level` | int | `2` | Accel curve intensity: 1=Low, 2=Med, 3=High |
 | `scroll_sensitivity` | int | `4` | Stick scroll speed (1–10, normalized to 4=1.0x) |
 | `double_click_enabled` | bool | `true` | Rapid press within 400ms = double-click |
+| `button_map` | dict | see `DEFAULT_BUTTON_MAP` | Button → action (`left` / `right` / `middle` / `back` / `forward` / `none`) for L, R, ZL, ZR, STICK, A, Y, D-pad ←/→. Edited in the Buttons tab; invalid entries reset per button on load |
 | `swap_click_buttons` | bool | `false` | `false`: shoulder L/R = left click, trigger ZL/ZR = right. `true`: swapped. Release always pairs with the press that was fired, so toggling mid-press can't strand a button |
 | `vibration_on_connect` | bool | `true` | Haptic feedback when controller connects |
 | `show_gatt_dump` | bool | `false` | Print full GATT profile to terminal on connect |

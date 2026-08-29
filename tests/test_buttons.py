@@ -197,3 +197,49 @@ class TestSwapClickButtons:
         parser.buttons.parse(state, _right_packet(0))                     # release
         state.input_simulator.mouse_up.assert_called_once()
         state.input_simulator.mouse_up_right.assert_not_called()
+
+
+class TestButtonMap:
+    """``settings["button_map"]`` (button name → action) is the source of
+    truth for what each button does; ``swap_click_buttons`` flips
+    left/right on top of it."""
+
+    def test_default_map_matches_documented_layout(self):
+        from user_preferences import DEFAULT_BUTTON_MAP
+        assert DEFAULT_BUTTON_MAP == {
+            "L": "left", "R": "left", "ZL": "right", "ZR": "right",
+            "STICK": "middle", "A": "forward", "Y": "back",
+            "LEFT": "back", "RIGHT": "forward",
+        }
+
+    def test_remapped_A_fires_middle_click(self, monkeypatch):
+        from user_preferences import DEFAULT_BUTTON_MAP
+        monkeypatch.setitem(parser.buttons.settings, "swap_click_buttons", False)
+        monkeypatch.setitem(parser.buttons.settings, "button_map", {**DEFAULT_BUTTON_MAP, "A": "middle"})
+        state = _state("right")
+        parser.buttons.parse(state, _right_packet(0))
+        parser.buttons.parse(state, _right_packet(MASKS["right"]["A"]))
+        state.input_simulator.mouse_down_middle.assert_called_once()
+        state.input_simulator.mouse_down_forward.assert_not_called()
+
+    def test_action_none_fires_nothing(self, monkeypatch):
+        from user_preferences import DEFAULT_BUTTON_MAP
+        monkeypatch.setitem(parser.buttons.settings, "swap_click_buttons", False)
+        monkeypatch.setitem(parser.buttons.settings, "button_map", {**DEFAULT_BUTTON_MAP, "R": "none"})
+        state = _state("right")
+        parser.buttons.parse(state, _right_packet(0))
+        parser.buttons.parse(state, _right_packet(MASKS["right"]["R"]))
+        parser.buttons.parse(state, _right_packet(0))
+        state.input_simulator.mouse_down.assert_not_called()
+        state.input_simulator.mouse_up.assert_not_called()
+
+    def test_swap_applies_on_top_of_map(self, monkeypatch):
+        """R remapped to "right" + swap on → left click."""
+        from user_preferences import DEFAULT_BUTTON_MAP
+        monkeypatch.setitem(parser.buttons.settings, "swap_click_buttons", True)
+        monkeypatch.setitem(parser.buttons.settings, "button_map", {**DEFAULT_BUTTON_MAP, "R": "right"})
+        state = _state("right")
+        parser.buttons.parse(state, _right_packet(0))
+        parser.buttons.parse(state, _right_packet(MASKS["right"]["R"]))
+        state.input_simulator.mouse_down.assert_called_once()
+        state.input_simulator.mouse_down_right.assert_not_called()

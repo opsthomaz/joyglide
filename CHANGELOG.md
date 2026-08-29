@@ -6,6 +6,14 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Buttons tab — free button remapping** (`settings["button_map"]`):
+  L, R, ZL, ZR, stick press, A, Y and D-pad ←/→ can each be set to
+  left / right / middle click, back, forward, or nothing. Defaults are
+  unchanged; "Swap click buttons" still flips left↔right on top of the
+  map. Invalid hand-edited entries reset per button on load. 8 tests.
+
 ### Fixed
 
 - **Sync could get stuck on "Connecting…" forever** with the controller

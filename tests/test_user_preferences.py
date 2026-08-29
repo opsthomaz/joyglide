@@ -101,3 +101,32 @@ class TestCorruptSettingsFile:
         assert loaded["sensitivity"] == DEFAULTS["sensitivity"]
         assert (tmp_path / "settings.json.corrupt").exists()
         assert (tmp_path / "settings.json.corrupt").read_text() == '{"sensitivity": 1.0,,}'
+
+
+class TestButtonMapValidation:
+    def test_invalid_action_resets_that_button_only(self):
+        from user_preferences import DEFAULT_BUTTON_MAP
+        raw = _valid(); raw["button_map"] = {**DEFAULT_BUTTON_MAP, "R": "teleport", "A": "middle"}
+        v = validate_settings(raw)
+        assert v["button_map"]["R"] == "left"
+        assert v["button_map"]["A"] == "middle"
+
+    def test_unknown_button_dropped_and_missing_button_filled(self):
+        from user_preferences import DEFAULT_BUTTON_MAP
+        raw = _valid(); raw["button_map"] = {"R": "right", "BANANA": "left"}
+        v = validate_settings(raw)
+        assert "BANANA" not in v["button_map"]
+        assert v["button_map"]["R"] == "right"
+        assert v["button_map"]["ZR"] == DEFAULT_BUTTON_MAP["ZR"]
+        assert set(v["button_map"]) == set(DEFAULT_BUTTON_MAP)
+
+    def test_non_dict_button_map_resets(self):
+        from user_preferences import DEFAULT_BUTTON_MAP
+        raw = _valid(); raw["button_map"] = "everything"
+        assert validate_settings(raw)["button_map"] == DEFAULT_BUTTON_MAP
+
+    def test_defaults_button_map_is_a_copy(self):
+        """Mutating the loaded map must not mutate the module default."""
+        from user_preferences import DEFAULT_BUTTON_MAP, DEFAULTS
+        assert DEFAULTS["button_map"] == DEFAULT_BUTTON_MAP
+        assert DEFAULTS["button_map"] is not DEFAULT_BUTTON_MAP

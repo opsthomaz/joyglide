@@ -79,6 +79,7 @@ hiddenimports = [
     'ui',
     'ui._shared',
     'ui.dashboard',
+    'ui.buttons_tab',
     'ui.performance',
     'ui.settings_tab',
     'ui.modals',

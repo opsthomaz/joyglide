@@ -2,56 +2,41 @@
 """Button parser — bitmask diff → click events.
 
 Reads the side-specific 24-bit button field, diffs against the previous
-packet, and emits mouse_down / mouse_up via the state's InputSimulator
-when the L/R or ZL/ZR buttons transition. Other button transitions
-are logged at DEBUG level only.
+packet, and emits the mapped mouse action via the state's InputSimulator
+when a mapped button transitions (``settings["button_map"]``). Other
+button transitions are logged at DEBUG level only.
 """
 from applog import get_logger
 from parser.button_masks import MASKS
-from user_preferences import settings
+from user_preferences import DEFAULT_BUTTON_MAP, settings
 
 log = get_logger(__name__)
 
 
-# Button-name → (press method, release method) on the InputSimulator.
-# Lookup-table dispatch keeps complexity flat as new mappings are added
-# (xenon's complexity gate; "if name in ..." chains add a rank per
-# branch). Names not in this table fall through to the debug-only path.
-_MOUSE_METHODS = {
-    "R":     ("mouse_down",         "mouse_up"),
-    "L":     ("mouse_down",         "mouse_up"),
-    "ZR":    ("mouse_down_right",   "mouse_up_right"),
-    "ZL":    ("mouse_down_right",   "mouse_up_right"),
-    # Pressing the analog stick acts as middle-mouse click — same role
-    # as a wheel-button on a regular mouse. Same name on both sides per
-    # parser/button_masks.py.
-    "STICK": ("mouse_down_middle",  "mouse_up_middle"),
-    # Right-side face buttons → browser / Finder navigation.
-    # A and Y only exist in the right Joy-Con's mask, so these
-    # entries are no-ops on a left controller. Standard convention:
-    # button 4/X1 = back, button 5/X2 = forward.
-    "A":     ("mouse_down_forward", "mouse_up_forward"),
-    "Y":     ("mouse_down_back",    "mouse_up_back"),
-    # Left-side D-pad → browser / Finder navigation. RIGHT (forward)
-    # and LEFT (back) chosen because they're spatially intuitive —
-    # press D-pad-right to go forward, D-pad-left to go back. UP/DOWN
-    # left unbound (could be scroll wheel or PgUp/PgDn in a future
-    # revision; not worth choosing a default). LEFT and RIGHT only
-    # exist in the left Joy-Con's mask, so these entries are no-ops
-    # on a right controller.
-    "LEFT":  ("mouse_down_back",    "mouse_up_back"),
-    "RIGHT": ("mouse_down_forward", "mouse_up_forward"),
+# Action → (press method, release method) on the InputSimulator. Which
+# button triggers which action comes from ``settings["button_map"]``
+# (see ``user_preferences.DEFAULT_BUTTON_MAP`` for the default layout and
+# the rationale per button); ``settings["swap_click_buttons"]`` flips
+# left↔right on top of it. Buttons with no mapping (or action "none")
+# fall through to the debug-only path.
+_ACTION_METHODS = {
+    "left":    ("mouse_down",         "mouse_up"),
+    "right":   ("mouse_down_right",   "mouse_up_right"),
+    "middle":  ("mouse_down_middle",  "mouse_up_middle"),
+    "back":    ("mouse_down_back",    "mouse_up_back"),
+    "forward": ("mouse_down_forward", "mouse_up_forward"),
 }
+_SWAP = {"left": "right", "right": "left"}
 
-# ``settings["swap_click_buttons"]`` layout: trigger = left click,
-# shoulder = right click. Everything else is identical.
-_MOUSE_METHODS_SWAPPED = {
-    **_MOUSE_METHODS,
-    "R":  ("mouse_down_right", "mouse_up_right"),
-    "L":  ("mouse_down_right", "mouse_up_right"),
-    "ZR": ("mouse_down",       "mouse_up"),
-    "ZL": ("mouse_down",       "mouse_up"),
-}
+
+def _methods_for(name: str):
+    """Resolve ``name`` → (press, release) method names, or None."""
+    action = settings.get("button_map", DEFAULT_BUTTON_MAP).get(name)
+    if action is None:
+        return None
+    if settings.get("swap_click_buttons", False):
+        action = _SWAP.get(action, action)
+    return _ACTION_METHODS.get(action)
 
 
 def parse(state, data: bytes) -> None:
@@ -83,7 +68,6 @@ def parse(state, data: bytes) -> None:
         return
 
     sim = state.input_simulator
-    table = _MOUSE_METHODS_SWAPPED if settings.get("swap_click_buttons", False) else _MOUSE_METHODS
     # ``state._held_ups`` remembers, per held button, the release method
     # that pairs with the press we actually fired — so toggling the swap
     # setting mid-press still releases the right mouse button instead of
@@ -96,17 +80,17 @@ def parse(state, data: bytes) -> None:
             continue
 
         if pressed:
-            methods = table.get(name)
+            methods = _methods_for(name)
             if methods is not None:
                 held[name] = methods[1]
                 getattr(sim, methods[0])()
         else:
             # Prefer the release recorded at press time; fall back to the
-            # current table when there is none (e.g. ``last_data`` was
+            # current map when there is none (e.g. ``last_data`` was
             # seeded with the button already held).
             up = held.pop(name, None)
             if up is None:
-                methods = table.get(name)
+                methods = _methods_for(name)
                 up = methods[1] if methods is not None else None
             if up is not None:
                 getattr(sim, up)()

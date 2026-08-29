@@ -8,7 +8,7 @@
 
 > Use a Nintendo Switch 2 Joy-Con as a desktop mouse on macOS and Windows.
 
-The Joy-Con 2 has an optical sensor on the bottom, just like a regular mouse. This app pairs it over Bluetooth Low Energy and turns the cursor movement into a real macOS / Windows mouse — sub-pixel motion, click on `L`/`R` (left) and `ZL`/`ZR` (right) — swappable in Settings — scroll on the analog stick, battery readout, the works.
+The Joy-Con 2 has an optical sensor on the bottom, just like a regular mouse. This app pairs it over Bluetooth Low Energy and turns the cursor movement into a real macOS / Windows mouse — sub-pixel motion, click on `L`/`R` (left) and `ZL`/`ZR` (right) — every button remappable in the Buttons tab — scroll on the analog stick, battery readout, the works.
 
 ```mermaid
 flowchart LR

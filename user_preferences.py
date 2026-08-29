@@ -29,6 +29,24 @@ APP_NAME = "joyglide"
 APP_AUTHOR = "opsthomaz"  # platformdirs path segment (Windows); not license attribution
 
 
+# Button name (parser/button_masks.py) → mouse action. Buttons absent from
+# this map (B, X, PLUS, MINUS, HOME, CHAT, SHARE, SL, SR, UP, DOWN) are not
+# remappable and do nothing. Actions: left / right / middle / back /
+# forward / none. ``swap_click_buttons`` flips left↔right on top of it.
+DEFAULT_BUTTON_MAP = {
+    "L":     "left",
+    "R":     "left",
+    "ZL":    "right",
+    "ZR":    "right",
+    "STICK": "middle",
+    "A":     "forward",
+    "Y":     "back",
+    "LEFT":  "back",
+    "RIGHT": "forward",
+}
+BUTTON_ACTIONS = ("left", "right", "middle", "back", "forward", "none")
+
+
 # Default values for every setting we know about. Acts as both the initial
 # config when settings.json doesn't exist yet and as a migration source
 # (any key missing from a loaded settings.json gets its default value).
@@ -53,6 +71,7 @@ DEFAULTS = {
     "double_click_enabled": True,     # rapid press within 400ms = double-click
     "swap_click_buttons": False,      # False: shoulder L/R = left click, trigger ZL/ZR = right
                                       # True:  trigger = left click, shoulder = right
+    "button_map": dict(DEFAULT_BUTTON_MAP),  # button → action, see DEFAULT_BUTTON_MAP
 
     # ── Hardware ────────────────────────────────────────────────────────
     "vibration_on_connect": True,     # play the PAIRING haptic when a JC2 connects
@@ -143,6 +162,16 @@ def validate_settings(settings: dict) -> dict:
 
     if settings.get("profile") not in _VALID_PROFILES:
         settings["profile"] = DEFAULTS["profile"]
+
+    # button_map: exactly the mappable buttons, each with a valid action.
+    # Unknown buttons are dropped; missing / invalid ones get the default.
+    raw_map = settings.get("button_map")
+    if not isinstance(raw_map, dict):
+        raw_map = {}
+    settings["button_map"] = {
+        btn: (raw_map[btn] if raw_map.get(btn) in BUTTON_ACTIONS else default_action)
+        for btn, default_action in DEFAULT_BUTTON_MAP.items()
+    }
 
     for key, (lo, hi) in _NUMERIC_RANGES.items():
         val = settings.get(key)

@@ -137,6 +137,7 @@ class SettingsMixin:
             self.swap_click_var.set(settings["swap_click_buttons"])
             self.vibration_var.set(settings["vibration_on_connect"])
             self.gatt_dump_var.set(settings["show_gatt_dump"])
+            self.refresh_button_map_from_settings()
             confirm.destroy()
 
         ctk.CTkButton(btns, text="Reset", fg_color="#a04848",
