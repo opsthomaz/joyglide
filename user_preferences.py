@@ -179,8 +179,16 @@ def load_settings() -> dict:
     """
     settings_file = get_settings_path()
     if settings_file.exists():
-        with settings_file.open() as f:
-            settings = json.load(f)
+        try:
+            with settings_file.open() as f:
+                settings = json.load(f)
+        except json.JSONDecodeError:
+            # Hand-edited file with a syntax error. Keep the user's file
+            # for inspection and start from defaults rather than dying at
+            # import time with no window to explain why.
+            settings_file.replace(settings_file.with_suffix(".json.corrupt"))
+            create_default_settings()
+            return load_settings()
         for key, default in DEFAULTS.items():
             if key not in settings:
                 settings[key] = default

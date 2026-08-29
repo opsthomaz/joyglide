@@ -16,9 +16,10 @@ Key choices:
   * ``CGDisplayBounds`` is read in **points** (not pixels) — required, because
     on Retina displays pixels = 2× points and clamping at pixel dims would
     push the cursor 2× past the screen, breaking the Dock auto-show hot zone.
-  * ``CGDisplayModeGetRefreshRate`` returns 0 on some Apple Silicon internal
-    panels — we fall back to a hardware-model lookup (``sysctl hw.model``)
-    to identify ProMotion-capable Macs (120 Hz) vs. plain 60 Hz Airs.
+  * Display refresh rate comes from ``NSScreen.maximumFramesPerSecond``
+    (macOS 12+), which reports the panel's true peak — 120 on ProMotion —
+    where ``CGDisplayModeGetRefreshRate`` returns 0 for adaptive-refresh
+    built-in displays.
 
 Requires Accessibility permission. ``check_accessibility()`` returns the
 current state; the app uses it to gate startup and prompt the user if
@@ -26,47 +27,12 @@ denied.
 """
 import time
 from Quartz import CoreGraphics as CG
-import subprocess
 from user_preferences import settings
 from applog import get_logger
 import latency_trace
 
 log = get_logger(__name__)
 
-
-def _get_hardware_model():
-    """Read the Mac hardware model identifier (e.g. 'Mac16,12')."""
-    try:
-        return subprocess.check_output(["sysctl", "-n", "hw.model"]).decode("utf-8").strip()
-    except Exception:
-        return "Unknown"
-
-
-def _get_fallback_hz():
-    """Guess display refresh rate from the hardware model.
-
-    Used only when ``CGDisplayModeGetRefreshRate`` returns 0/invalid (which
-    happens on some Apple Silicon built-in panels). The list below is the
-    set of MacBook Pro models known to ship with ProMotion (120 Hz);
-    everything else (Air, Mac mini, iMac, external panels) is assumed 60 Hz.
-    """
-    model = _get_hardware_model()
-
-    # Known ProMotion (120 Hz) MacBook Pro models.
-    promotion_models = [
-        "MacBookPro18,1", "MacBookPro18,2", "MacBookPro18,3", "MacBookPro18,4",  # M1 Pro/Max (14/16)
-        "Mac14,5", "Mac14,6", "Mac14,9", "Mac14,10",                              # M2 Pro/Max (14/16)
-        "Mac15,3", "Mac15,6", "Mac15,7", "Mac15,8", "Mac15,9", "Mac15,10", "Mac15,11",  # M3 Pro/Max (14/16)
-        # M4 Pro/Max MacBook Pro 14"/16" (ProMotion 120Hz). The M4 Air
-        # (Mac16,2 / Mac16,3) is 60Hz and intentionally NOT in this list.
-        "Mac16,1", "Mac16,5", "Mac16,6", "Mac16,7", "Mac16,8", "Mac16,9", "Mac16,10", "Mac16,11",
-    ]
-
-    if any(model.startswith(m) for m in promotion_models):
-        return 120.0
-
-    # Conservative default for everything else (MacBook Air, Mac mini, 60Hz panels).
-    return 60.0
 
 def _max_refresh_rate_across_displays() -> float:
     """Return the highest refresh rate among all currently active displays.
@@ -77,31 +43,21 @@ def _max_refresh_rate_across_displays() -> float:
     the slowest panel just means a few wasted ticks, but running slower
     than the fastest means visible stutter on the fast one.
 
-    ``CGDisplayModeGetRefreshRate`` returns 0 on some Apple Silicon built-in
-    panels; we filter those out and fall back via the hardware-model lookup.
+    ``NSScreen.maximumFramesPerSecond`` (AppKit, macOS 12+) is the API
+    Apple provides for exactly this; it reports 120 on ProMotion panels
+    where ``CGDisplayModeGetRefreshRate`` returns 0. Earlier builds fell
+    back to a hard-coded list of ProMotion model identifiers, which went
+    stale with every new MacBook Pro generation. Falls back to 60 Hz when
+    no screen reports a plausible value.
     """
     try:
-        # PyObjC quirk: returns ``(error_code, displays_tuple, count)`` —
-        # NOT a 2-tuple. Pass the requested max as the first arg.
-        err, displays, count = CG.CGGetActiveDisplayList(16, None, None)
-        if err != 0 or not displays:
-            displays, count = (), 0
-    except Exception:
-        displays, count = (), 0
-
-    rates = []
-    for did in displays[:count]:
-        mode = CG.CGDisplayCopyDisplayMode(did)
-        if mode is None:
-            continue
-        hz = CG.CGDisplayModeGetRefreshRate(mode)
-        if 30.0 <= hz <= 500.0:
-            rates.append(float(hz))
-
-    if rates:
-        return max(rates)
-    # All zero/invalid — fall back to the hardware-model heuristic.
-    return _get_fallback_hz()
+        from AppKit import NSScreen
+        rates = [float(s.maximumFramesPerSecond()) for s in NSScreen.screens()]
+    except Exception as e:
+        log.debug(f"NSScreen refresh-rate query failed: {e}")
+        rates = []
+    rates = [r for r in rates if 30.0 <= r <= 500.0]
+    return max(rates) if rates else 60.0
 
 
 def _screen_bounds():

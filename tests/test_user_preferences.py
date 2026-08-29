@@ -83,3 +83,21 @@ class TestIntFieldsCoercedFromFloat:
         v = validate_settings({**_valid(), "acceleration_level": 2.0})
         assert v["acceleration_level"] == 2
         assert isinstance(v["acceleration_level"], int)
+
+
+class TestCorruptSettingsFile:
+    """Users are told to hand-edit settings.json; a stray comma must not
+    crash the app at import with no UI to explain why."""
+
+    def test_invalid_json_is_backed_up_and_defaults_written(self, tmp_path, monkeypatch):
+        import user_preferences as up
+
+        settings_file = tmp_path / "settings.json"
+        settings_file.write_text('{"sensitivity": 1.0,,}')
+        monkeypatch.setattr(up, "get_settings_path", lambda: settings_file)
+
+        loaded = up.load_settings()
+
+        assert loaded["sensitivity"] == DEFAULTS["sensitivity"]
+        assert (tmp_path / "settings.json.corrupt").exists()
+        assert (tmp_path / "settings.json.corrupt").read_text() == '{"sensitivity": 1.0,,}'

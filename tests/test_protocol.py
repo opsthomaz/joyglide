@@ -252,3 +252,14 @@ class TestPostConnectSetupOrdering:
         assert seq.index(cancel) < seq.index(leds), (
             "Bluetooth-Cancel (0x03/0x02) must precede set_leds (0x09/0x07)"
         )
+
+
+class TestWriteWithoutResponse:
+    """The JC2 command characteristic is write-without-response (ndeadly
+    bluetooth_interface.md). Say so explicitly instead of relying on
+    bleak's ``response=None`` auto-detection, so a future bleak default
+    change can't silently turn every command into a round-trip."""
+
+    def test_write_command_requests_no_response(self, client):
+        asyncio.run(proto.write_command(client, 0x09, 0x07, b"\x01"))
+        assert client.write_gatt_char.await_args.kwargs.get("response") is False

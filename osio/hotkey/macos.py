@@ -21,6 +21,8 @@ from Quartz import (
     CFRunLoopGetCurrent,
     CFRunLoopRun,
     kCGEventKeyDown,
+    kCGEventTapDisabledByTimeout,
+    kCGEventTapDisabledByUserInput,
     kCGEventFlagMaskAlternate,
     kCGEventFlagMaskCommand,
     kCGEventFlagMaskControl,
@@ -39,10 +41,26 @@ log = get_logger(__name__)
 _KEY_M = 46
 
 
-def install_pause_hotkey(callback) -> None:
-    """Spawns a daemon thread that calls ``callback()`` on ⌃⌥M keydown."""
+def _make_tap_callback(callback, tap_holder: list):
+    """Build the CGEventTap callback.
 
-    def tap_callback(_proxy, _type, event, _refcon):
+    ``tap_holder`` is a one-element list that ``install_pause_hotkey``
+    fills with the tap once ``CGEventTapCreate`` returns — the callback
+    is needed *before* the tap exists, and it must be able to re-enable
+    that same tap later.
+    """
+
+    def tap_callback(_proxy, event_type, event, _refcon):
+        # WindowServer disables a tap whose callback is too slow (a Python
+        # callback stalled by the GIL during a BLE burst is enough) or on
+        # certain user-input transitions. It reports that by calling us
+        # with one of these pseudo event types; unless we re-enable, the
+        # hotkey is silently dead until the app restarts.
+        if event_type in (kCGEventTapDisabledByTimeout, kCGEventTapDisabledByUserInput):
+            if tap_holder:
+                CGEventTapEnable(tap_holder[0], True)
+                log.warning("⌨️  Hotkey event tap was disabled by the system — re-enabled.")
+            return event
         # Drop auto-repeat events. macOS fires keyDown repeatedly while
         # ⌃⌥M is held — without this gate, a 500 ms hold would toggle
         # pause dozens of times. ``kCGKeyboardEventAutorepeat`` is the
@@ -66,6 +84,14 @@ def install_pause_hotkey(callback) -> None:
                 log.warning(f"⚠️ hotkey callback error: {e}")
         return event
 
+    return tap_callback
+
+
+def install_pause_hotkey(callback) -> None:
+    """Spawns a daemon thread that calls ``callback()`` on ⌃⌥M keydown."""
+    tap_holder: list = []
+    tap_callback = _make_tap_callback(callback, tap_holder)
+
     def run():
         mask = CGEventMaskBit(kCGEventKeyDown)
         tap = CGEventTapCreate(
@@ -80,6 +106,7 @@ def install_pause_hotkey(callback) -> None:
             log.warning("⚠️ Could not install global hotkey "
                   "(Accessibility permission likely missing).")
             return
+        tap_holder.append(tap)
         src = CFMachPortCreateRunLoopSource(None, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetCurrent(), src, kCFRunLoopCommonModes)
         CGEventTapEnable(tap, True)

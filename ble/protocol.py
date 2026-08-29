@@ -106,7 +106,10 @@ async def write_command(client, command_id: int, subcommand_id: int, data: bytes
     requires; we send them verbatim.
     """
     header = bytes([command_id, 0x91, 0x01, subcommand_id, 0x00, len(data), 0x00, 0x00])
-    await client.write_gatt_char(WRITE_COMMAND_UUID, header + data)
+    # The command characteristic is write-without-response (ndeadly
+    # bluetooth_interface.md). Say so explicitly rather than relying on
+    # bleak's ``response=None`` auto-detection.
+    await client.write_gatt_char(WRITE_COMMAND_UUID, header + data, response=False)
 
 
 async def cancel_bluetooth_advertising(client) -> None:

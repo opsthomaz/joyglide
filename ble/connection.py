@@ -23,6 +23,7 @@ import asyncio
 import contextlib
 
 from bleak import BleakClient, BleakScanner
+from bleak.exc import BleakBluetoothNotAvailableError
 
 from applog import get_logger
 from ble.constants import JOYCON_MANUFACTURER_ID, JOYCON_MANUFACTURER_PREFIX
@@ -90,7 +91,19 @@ async def scan_device(used_addresses: set, prompt: str = "controller", *,
             device_event.set()
 
     scanner = BleakScanner(callback)
-    await scanner.start()
+    try:
+        await scanner.start()
+    except BleakBluetoothNotAvailableError as e:
+        # bleak ≥2: the macOS Bluetooth permission was denied (or the
+        # radio is off). Nothing to retry — tell the user what to fix.
+        log.warning(f"📵 Bluetooth unavailable: {e}")
+        if command_queue is not None:
+            command_queue.put({"type": "status_update", "data": {
+                "text": "❌ Bluetooth unavailable — turn it on and allow Joyglide in "
+                        "System Settings → Privacy & Security → Bluetooth.",
+                "color": "#e74c3c",
+            }})
+        return None
 
     try:
         # asyncio.wait_for raises TimeoutError after `timeout` seconds. The
@@ -158,11 +171,13 @@ async def connect_and_setup(device, player, handler_func, command_queue,
     """Open a GATT connection, run the per-link setup, attach the input
     notification handler. Returns the connected ``BleakClient``.
     """
-    # ``disconnected_callback`` accepts ``None`` — no need for the
-    # conditional. The previous ``client._device = device`` line set a
-    # private bleak attribute that nothing in this codebase reads; it's
-    # been removed to avoid future collisions with bleak internals.
-    client = BleakClient(device.address, disconnected_callback=disconnect_cb)
+    # Pass the BLEDevice, not its address: bleak's CoreBluetooth backend
+    # then reuses the CBPeripheral it already discovered during our scan.
+    # Given an address string it runs a second scan inside connect() —
+    # slower, and a fresh point of failure right after the user's scan
+    # succeeded. (The reconnect loop deliberately uses the address, see
+    # maintain_connection_loop.) ``disconnected_callback`` accepts None.
+    client = BleakClient(device, disconnected_callback=disconnect_cb)
     await client.connect(timeout=5.0)
     player.address = device.address
     player.name    = device.name or "Joy-Con"

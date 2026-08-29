@@ -180,6 +180,41 @@ def _boost_windows() -> None:
         log.warning(f"⚠️ timeBeginPeriod failed: {e}")
 
 
+# ── Thread QoS (macOS) ───────────────────────────────────────────────────
+
+# QOS_CLASS_USER_INTERACTIVE from <sys/qos.h>.
+_QOS_CLASS_USER_INTERACTIVE = 0x21
+
+
+def boost_current_thread_qos() -> bool:
+    """Mark the *calling* thread as USER_INTERACTIVE QoS (macOS only).
+
+    Call from the thread that hosts the BLE callbacks + motion pump (see
+    ``bg_loop``). On Apple Silicon the QoS class is what the scheduler
+    uses to keep a thread on a performance core; a plain Python thread
+    gets QOS_CLASS_DEFAULT and can be parked on an efficiency core, which
+    shows up as pump-tick jitter. ``os.nice`` never affects this and
+    needs root anyway. Returns True when applied; False on other
+    platforms or if libc lacks the call.
+    """
+    if sys.platform != "darwin":
+        return False
+    try:
+        import ctypes
+        import ctypes.util
+        libc = ctypes.CDLL(ctypes.util.find_library("c"))
+        libc.pthread_set_qos_class_self_np.argtypes = [ctypes.c_uint, ctypes.c_int]
+        libc.pthread_set_qos_class_self_np.restype = ctypes.c_int
+        rc = libc.pthread_set_qos_class_self_np(_QOS_CLASS_USER_INTERACTIVE, 0)
+    except (AttributeError, OSError) as e:
+        log.debug(f"pthread_set_qos_class_self_np unavailable: {e}")
+        return False
+    if rc != 0:
+        log.debug(f"pthread_set_qos_class_self_np returned {rc}")
+        return False
+    return True
+
+
 # ── BLE connection parameter tweak (Windows-only effective) ──────────────
 
 async def request_throughput_optimized(client) -> bool:

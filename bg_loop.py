@@ -40,6 +40,11 @@ def _start_background_loop() -> None:
         _background_loop = loop
         def _run() -> None:
             """Daemon-thread entry point — bind the new loop and run forever."""
+            # This thread hosts every BLE notification callback and the
+            # motion pump — the latency-critical path. On macOS, mark it
+            # USER_INTERACTIVE so Apple Silicon keeps it on a P-core.
+            from osio.boost import boost_current_thread_qos
+            boost_current_thread_qos()
             asyncio.set_event_loop(loop)
             loop.run_forever()
         Thread(target=_run, daemon=True, name="joyglide-bg-loop").start()
