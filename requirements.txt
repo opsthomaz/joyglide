@@ -14,13 +14,12 @@ platformdirs>=4.9.6
 customtkinter>=5.2.2
 
 # ── macOS only ───────────────────────────────────────────────────────────
-pyobjc-framework-Quartz>=10.0;              sys_platform == 'darwin'
+pyobjc-framework-Quartz>=12.2.1;            sys_platform == 'darwin'
 pyobjc-framework-Cocoa>=12.2.1;               sys_platform == 'darwin'
 # AXIsProcessTrustedWithOptions for the Accessibility prompt; without this
 # wheel the call in mouse_macos.request_accessibility silently no-ops on
 # a fresh install (the bare except swallows the ModuleNotFoundError).
-pyobjc-framework-ApplicationServices>=10.0; sys_platform == 'darwin'
-py2app>=0.28.10;                             sys_platform == 'darwin'
+pyobjc-framework-ApplicationServices>=12.2.1; sys_platform == 'darwin'
 
 # ── Windows only ─────────────────────────────────────────────────────────
 # Note: we DO NOT depend on `winsdk` here. bleak already pulls in
@@ -40,4 +39,4 @@ py2app>=0.28.10;                             sys_platform == 'darwin'
 evdev>=1.9.3; sys_platform == 'linux'
 
 # ── Build/packaging (cross-platform) ─────────────────────────────────────
-pyinstaller>=6.21.0
+pyinstaller>=6.22.0
