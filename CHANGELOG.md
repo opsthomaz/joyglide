@@ -31,6 +31,21 @@ gates green (261 tests, ruff / pyright / mypy / import-linter / xenon).
   `0.1.0`; the spec now reads the version from `pyproject.toml`.
 - **Corrupt `settings.json` crashed at import** with no window. It is
   now moved to `settings.json.corrupt` and defaults are recreated.
+- **Auto-hidden Dock flickered up/down** when pushing the cursor
+  against the bottom edge. macOS bounds a real pointer to
+  `size − 1/64` per axis (`CGWarpMouseCursorPosition` → y = 1111.984
+  on a 1112-pt display) but accepts posted events anywhere; our clamp
+  parked the cursor at exactly `size`, 1 pt outside the valid range,
+  where the Dock's edge trigger fired but its hit-test failed. Clamp
+  now uses `size − 1/64`. Tier S (measured; Dock verified fixed).
+- **Pump kept posting 60 zero-pixel events/s for ~10 s after every
+  stop** (event-tap capture attributed by source PID): the idle brake
+  shrinks the accumulator geometrically but never reached 0.0.
+  `engine.tuning.settle_accumulator` snaps |accum| < 0.05 px to zero.
+- **Bogus multi-second `latency.internal_us` sample at pump start**
+  (6.15 s observed): `create_task` copied the BLE callback's
+  contextvars (latency_trace's t0) into the pump task. `start_pump`
+  now uses a fresh `contextvars.Context()`.
 - Docstrings in `main.py` / `ARCHITECTURE.md` still described one event
   loop per controller; every controller shares the `bg_loop` singleton.
 
@@ -57,6 +72,21 @@ gates green (261 tests, ruff / pyright / mypy / import-linter / xenon).
   (first release whose tkinter hooks handle Tcl/Tk 9), pytest ≥9;
   dropped the unused `py2app` pin. CI pinned to `macos-26`,
   `actions/checkout` v7, `actions/setup-python` v7.
+
+### Verified (Tier S — hardware, 2026-08-29, JC2-R fw 2.1.4.1, macOS 26.6.2)
+
+- Posted Moved/Dragged events carry `kCGMouseEventDeltaX/Y` end to
+  end (listen-only event tap: 26–52 of 60 events/s with non-zero delta
+  while moving; a probe event with delta 7/−5 arrived intact).
+- `NSActivity` fix: with the old literal `0x00FFFFFF` the process holds
+  `PreventUserIdleSystemSleep` (`pmset -g assertions`); with the named
+  constants it holds no assertion.
+- Reconnect after a Bluetooth off/on toggle succeeded on the first
+  retry with the fresh `BleakClient`.
+- `latency.internal_us` alltime_max after the contextvar fix: 115 µs
+  (previously a 6.15 s outlier); `cgevent_us` p50 ≈ 90 µs, unchanged
+  from the May baseline.
+- Dock edge behaviour: auto-hidden Dock now reveals and stays.
 
 ### Research (2026-08-29 source re-verification)
 
