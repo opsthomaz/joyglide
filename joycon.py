@@ -71,7 +71,7 @@ class JoyCon:
         # second to avoid UI churn.
         self.battery_mv: int | None        = None
         self.battery_pct: int | None       = None
-        self.battery_current_ma: int | None = None
+        self.battery_current_ma: float | None = None
         self.battery_charging = False
         self.battery_full     = False
         self._battery_last_ts = 0.0

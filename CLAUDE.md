@@ -87,9 +87,14 @@ multiple times. The CLAUDE.md exists in part to prevent that.
 - **`FEATURE_MASK_DEFAULT = 0xFF` — do NOT trim.** An earlier
   development build trimmed to `0x33` (Button + Stick + Mouse + Rumble)
   on the theory it saved controller-side battery; reverted after
-  hardware testing proved the firmware silently rejected it. The
-  `coffincolors/jc2mouse` Linux driver uses `0xFF` and that's the
-  empirically-validated path.
+  hardware testing showed the firmware rejected it *with our init
+  sequence*. The `coffincolors/jc2mouse` Linux driver and the
+  macOS-native `OZORDI/JoyCon2Mac` both use `0xFF` — that's the
+  empirically-validated path. Nuance (2026-08): `TheFrano/joycon2cpp`
+  v1.3+ uses `0x37` on Windows, but only inside a console-captured
+  15-command init with a `0x0A/0x08` vibration-init between the two
+  `0x0C` writes (Tier C, unverified on macOS). Don't trim without
+  reproducing that whole sequence on hardware.
 - **Subscribing to two input-report characteristics simultaneously
   kills input report 0x05's stream — but ONLY on the same
   peripheral.** Verified: with two JC2s connected (JC-R + JC-L),
@@ -118,6 +123,13 @@ multiple times. The CLAUDE.md exists in part to prevent that.
   events**, not just Move. RightMouse and OtherMouse events
   specifically fail to register as context-menu-triggering clicks
   without it (hardware-verified fix carried into v0.1.0).
+- **macOS Moved/Dragged events must carry `kCGMouseEventDeltaX/Y`.**
+  `CGEventCreateMouseEvent` leaves them at 0; delta-reading consumers
+  (FPS games, `NSEvent.deltaX`) see no motion without them.
+- **`NSActivity` options must use the named Foundation constants.**
+  The literal `0x00FFFFFF` is `NSActivityUserInitiated`, which
+  *disables* idle system sleep; `AllowingIdleSystemSleep` is
+  `0x00EFFFFF`.
 
 ### 4. Calibration constants (Tier S — hardware-verified)
 
@@ -130,9 +142,10 @@ multiple times. The CLAUDE.md exists in part to prevent that.
   30ms BLE packets which equals 1 MHz, not the lower figure.
   Possibly the issue's comment refers to USB or a different
   revision; the BLE-on-macOS verified value is 1 MHz.
-- Battery current: **`raw u16 / 100 = mA`** (TropicalCyclone driver
-  + our 818-s capture both confirm: raw 1820 → 18.2 mA matches the
-  525 mAh / 20-h spec).
+- Battery current: **`raw u16 / 100 = mA`** (Nadeflore/switch2-controllers
+  `controller.py:138` — formerly cited via the deleted TropicalCyclone
+  fork — + our 818-s capture both confirm: raw 1820 → 18.2 mA matches
+  the 525 mAh / 20-h spec).
 
 ### 5. Testing rules
 
@@ -145,7 +158,7 @@ multiple times. The CLAUDE.md exists in part to prevent that.
 - Hardware-only verifications go in `CHANGELOG.md` with date +
   observed values, marked Tier S.
 - "Passes" = all of:
-  - 150+ tests green (currently 180; growing)
+  - 150+ tests green (currently 261; growing)
   - `ruff check .` clean
   - `pyright` 0 errors / 0 warnings
   - `lint-imports` 5 / 5 contracts

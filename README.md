@@ -89,7 +89,7 @@ python main.py
 - **Sub-pixel cursor motion** (Quartz on macOS native; software-accumulated on Windows).
 - **Per-profile idle brake** so each profile has its own "stop" character.
 - **Adaptive drain factor** — the pump's drain ratio auto-adjusts to whatever BLE rate the OS negotiated (33 Hz on macOS, ~67 Hz on Windows). Same code, no toggles.
-- **Battery indicator** parsed live from input report `0x05` (offsets per ndeadly's research; current-scale `raw / 100 = mA` cross-validated against TropicalCyclone's driver + an 818 s hardware capture — pinned Tier S).
+- **Battery indicator** parsed live from input report `0x05` (offsets per ndeadly's research; current-scale `raw / 100 = mA` cross-validated against Nadeflore's `switch2-controllers` driver + an 818 s hardware capture — pinned Tier S).
 - **Global pause hotkey** — `Ctrl+Alt+M` (Win) / `⌃⌥M` (Mac) freezes input without disconnecting. Resume is instant.
 - **Multiple controllers** — pair as many Joy-Cons as you want; each gets its own row in the dashboard with battery, side toggle, and disconnect button.
 - **Switch left ↔ right** at runtime without disconnecting (re-maps button masks in place).
@@ -107,7 +107,7 @@ python main.py
 | Effective input rate | ~33 Hz | **~67 Hz** (2× macOS) |
 | Cursor injection | `CGEventPost` (sub-pixel float native) | `SendInput` + `MOUSEEVENTF_MOVE_NOCOALESCE` (cached struct, declared argtypes) |
 | Pump rate | display refresh (60 / 120 Hz) | display refresh (60 / 120 Hz) |
-| Process priority | `os.nice(-10)` + `NSActivity` Anti App-Nap | `HIGH_PRIORITY_CLASS` + `SetThreadExecutionState` |
+| Process priority | `NSActivity` (UserInitiated + LatencyCritical) + USER_INTERACTIVE thread QoS | `HIGH_PRIORITY_CLASS` + `SetThreadExecutionState` |
 | Timer resolution | nominal | `timeBeginPeriod(1)` (1 ms) |
 | Typical end-to-end latency | ~40 ms | ~25 ms |
 
@@ -144,10 +144,10 @@ The pre-built `.app` is **arm64 native** (Apple Silicon). Intel Macs run via Ros
 | Mac | Status | How |
 |---|---|---|
 | Apple Silicon (M1, M2, M3, M4 — any model) | ✅ Native | Optimal performance |
-| Intel Mac 2012+ with macOS 10.15+ | ✅ Native via Rosetta 2 | Transparent, slight overhead (~10–25%) |
+| Intel Mac with macOS 11–26 | ✅ Via Rosetta 2 | Transparent, slight overhead (~10–25%); macOS 27 is Apple-silicon-only |
 | PowerPC / pre-2012 Macs | ❌ Not supported | No BLE, no modern frameworks |
 
-Minimum macOS: **Catalina 10.15** (Big Sur 11+ recommended). All modern macOS releases are tested.
+Minimum macOS: **Big Sur 11.0** (`LSMinimumSystemVersion`); developed and hardware-tested on macOS 26.
 
 Bluetooth: any Mac shipped from 2012 onward has BLE 4.0+ — no extra hardware needed.
 
@@ -297,7 +297,8 @@ This project stands on the shoulders of a lot of reverse-engineering work. In ro
 - **[Misaka10571/joycon2-connector](https://github.com/Misaka10571/joycon2-connector)** — another C++ Windows implementation; their vibration sample IDs (`BUZZ`, `FIND`, `CONNECT`, `PAIRING`, `STRONG_THUNK`, `DUN`, `DING`) are documented and worth borrowing.
 - **[german77/JoyconDriver](https://github.com/german77/JoyconDriver)** — Wireshark dissector for Switch 2 controller traffic; critical for cross-checking pcap captures.
 - **[coffincolors/jc2mouse](https://github.com/coffincolors/jc2mouse)** — Linux userspace driver. Independent confirmation of the GATT UUIDs and enable sequence we use.
-- **[TropicalCyclone/switch2-controller-driver](https://github.com/TropicalCyclone/switch2-controller-driver)** — Python driver that independently arrived at the same input report 0x05 layout and, crucially, the same `raw / 100 = mA` scale for the battery current field at offset 0x22 — cross-validation that pinned that calibration to Tier S in our protocol catalog.
+- **[Nadeflore/switch2-controllers](https://github.com/Nadeflore/switch2-controllers)** — Python driver that independently arrived at the same input report 0x05 layout and, crucially, the same `raw / 100 = mA` scale for the battery current field at offset 0x22 — cross-validation that pinned that calibration to Tier S in our protocol catalog. (Earlier releases cited the `TropicalCyclone/switch2-controller-driver` fork, since deleted.)
+- **[OZORDI/JoyCon2Mac](https://github.com/OZORDI/JoyCon2Mac)** — macOS-native CoreBluetooth + DriverKit driver (needs SIP off). Independent confirmation that the `0xFF` feature mask and the 0x05 + command-response dual subscription work on Apple's BLE stack.
 
 If you're picking up this codebase for further work, **also clone ndeadly's repo into `research/`** for offline reference — it's gitignored from this repo for size reasons, but the docs link to specific files in it.
 

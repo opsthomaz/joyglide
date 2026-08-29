@@ -55,5 +55,6 @@ has its own license; consult the upstream repositories for terms.
   Misaka10571/joycon2-connector
   german77/JoyconDriver
   coffincolors/jc2mouse
-  TropicalCyclone/switch2-controller-driver
+  Nadeflore/switch2-controllers (previously cited as its deleted fork,
+    TropicalCyclone/switch2-controller-driver)
   moutella/joycon2mouse

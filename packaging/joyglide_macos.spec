@@ -11,6 +11,7 @@ Usage (from repo root, in venv):
 Output:
   dist/Joyglide.app
 """
+import tomllib
 from pathlib import Path
 
 block_cipher = None
@@ -19,6 +20,12 @@ block_cipher = None
 # assets/, Joyglide.icns) is at the repo root. SPECPATH is the directory
 # of the .spec file itself, so .parent is the repo root.
 PROJECT_ROOT = Path(SPECPATH).parent
+
+# Single source of truth for the version: pyproject.toml. The Info.plist
+# used to carry a hand-maintained copy that drifted (0.1.0 while the
+# project was at 0.1.2).
+with (PROJECT_ROOT / 'pyproject.toml').open('rb') as _f:
+    APP_VERSION = tomllib.load(_f)['project']['version']
 
 datas = [
     (str(PROJECT_ROOT / 'assets'), 'assets'),
@@ -144,11 +151,11 @@ exe = EXE(
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
-    # arm64 native (Apple Silicon). Intel Macs run via Rosetta 2 (transparent,
-    # macOS prompts to install on first launch). A true universal2 build would
-    # need every wheel dep installed with --platform macosx_*_universal2 which
-    # is non-trivial to wire in CI; sticking with arm64 native keeps the build
-    # simple and Rosetta covers Intel transparently.
+    # arm64 native (Apple Silicon). Intel Macs run via Rosetta 2 on macOS
+    # ≤26 (transparent, macOS prompts to install on first launch); macOS 27
+    # is Apple-silicon-only, so a universal2 build has a shrinking
+    # audience. It would need every wheel dep installed with
+    # --platform macosx_*_universal2, which is non-trivial to wire in CI.
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
@@ -175,8 +182,8 @@ app = BUNDLE(
     info_plist={
         'CFBundleName':                'Joyglide',
         'CFBundleDisplayName':         'Joyglide',
-        'CFBundleVersion':             '0.1.0',
-        'CFBundleShortVersionString':  '0.1.0',
+        'CFBundleVersion':             APP_VERSION,
+        'CFBundleShortVersionString':  APP_VERSION,
         'CFBundleIdentifier':          'com.opsthomaz.joyglide',
         'CFBundlePackageType':         'APPL',
         # LSUIElement = 1 → menu-bar app, no Dock icon
@@ -189,11 +196,11 @@ app = BUNDLE(
             'Joyglide needs Bluetooth to connect to your Joy-Con 2.',
         'NSBluetoothPeripheralUsageDescription':
             'Joyglide needs Bluetooth to connect to your Joy-Con 2.',
-        # Minimum macOS version. We target Catalina (10.15) — the oldest
-        # macOS that supports modern CoreBluetooth, NSActivity, and the
-        # CGEvent APIs we use. In practice this covers every Mac shipped
-        # since ~2012 (10.15 dropped 32-bit support but kept Macs from 2012+).
-        'LSMinimumSystemVersion':      '10.15',
+        # Minimum macOS version. The binary is arm64-only, and no Apple
+        # Silicon Mac runs anything older than Big Sur (11.0); we also use
+        # NSScreen.maximumFramesPerSecond (12.0+) with a 60 Hz fallback.
+        # bleak ≥2 itself requires 10.15+.
+        'LSMinimumSystemVersion':      '11.0',
         # High-DPI rendering
         'NSHighResolutionCapable':     True,
     },

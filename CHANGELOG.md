@@ -4,6 +4,82 @@ All notable changes to Joyglide are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+Full-codebase audit (2026-08-29): line-by-line review, re-verification of
+every upstream protocol source, and a macOS 26 / toolchain refresh. All
+gates green (261 tests, ruff / pyright / mypy / import-linter / xenon).
+
+### Fixed
+
+- **App kept the Mac from idle-sleeping.** `osio/boost.py` passed the
+  literal `0x00FFFFFF` to `beginActivityWithOptions_reason_` believing
+  it was `NSActivityUserInitiatedAllowingIdleSystemSleep`; that value is
+  `NSActivityUserInitiated`, which carries `IdleSystemSleepDisabled`.
+  Now uses the named Foundation constants (AllowingIdleSystemSleep =
+  `0x00EFFFFF`) plus `NSActivityLatencyCritical` for the pump's timers.
+  Tier B — constant values verified against pyobjc 12.2 on macOS 26.6.
+- **No motion for delta-reading consumers.** `CGEventCreateMouseEvent`
+  leaves `kCGMouseEventDeltaX/Y` at 0, so FPS games with a captured
+  cursor and `NSEvent.deltaX` users saw nothing from the Gaming profile.
+  Moved / Dragged events now carry the rounded per-event delta.
+- **⌃⌥M could die silently.** The hotkey `CGEventTap` never handled
+  `kCGEventTapDisabledByTimeout` / `ByUserInput`; a GIL stall during a
+  BLE burst was enough for WindowServer to disable it for good. The
+  callback now re-enables the tap.
+- **Stale `.app` version.** `Info.plist` carried a hand-maintained
+  `0.1.0`; the spec now reads the version from `pyproject.toml`.
+- **Corrupt `settings.json` crashed at import** with no window. It is
+  now moved to `settings.json.corrupt` and defaults are recreated.
+- Docstrings in `main.py` / `ARCHITECTURE.md` still described one event
+  loop per controller; every controller shares the `bg_loop` singleton.
+
+### Changed
+
+- **Display refresh rate via `NSScreen.maximumFramesPerSecond`**
+  (macOS 12+), replacing the hard-coded ProMotion model list that
+  stopped at `Mac16,x` and would have run the pump at 60 Hz on newer
+  120 Hz MacBook Pros. Tier B.
+- **BLE/pump thread runs at `QOS_CLASS_USER_INTERACTIVE`**
+  (`pthread_set_qos_class_self_np`) so Apple Silicon keeps it on a
+  performance core. `os.nice(-10)` never affected core placement and
+  always fails without root.
+- `ble.connection.connect_and_setup` passes the `BLEDevice` (not its
+  address) so bleak's CoreBluetooth backend reuses the discovered
+  peripheral instead of re-scanning; `scan_device` surfaces bleak ≥2's
+  `BleakBluetoothNotAvailableError` as a user-visible status.
+- `write_command` passes `response=False` explicitly.
+- Removed `gc.collect()` from `Player.__init__` / `disconnect` — a full
+  GC pass there stalls every other controller's pump for milliseconds.
+- `LSMinimumSystemVersion` 10.15 → 11.0 (arm64-only binary; no Apple
+  Silicon Mac predates Big Sur).
+- Dependencies: bleak ≥3.0.2, pyobjc ≥12.2.1, PyInstaller ≥6.22.0
+  (first release whose tkinter hooks handle Tcl/Tk 9), pytest ≥9;
+  dropped the unused `py2app` pin. CI pinned to `macos-26`,
+  `actions/checkout` v7, `actions/setup-python` v7.
+
+### Research (2026-08-29 source re-verification)
+
+- No upstream source contradicts any Tier-S constant (accel 4096/G,
+  gyro 48000/360°, temp 25 + raw/127, current raw/100 mA, IMU
+  timestamp 1 MHz). No Joy-Con 2 firmware change since 2.1.4.1 is
+  documented anywhere public.
+- `TropicalCyclone/switch2-controller-driver` (battery-current
+  citation) was deleted; the identical code lives in
+  `Nadeflore/switch2-controllers` (`controller.py:138`). Citations
+  updated. `darthcloud/BlueRetro` archived 2025-12-14.
+- New macOS-native reference `OZORDI/JoyCon2Mac` independently uses
+  mask `0xFF` and subscribes input 0x05 + response `c765a961` together.
+  `TheFrano/joycon2cpp` v1.3+ uses mask `0x37` inside a console-captured
+  init (Tier C, Windows) — CLAUDE.md §3 wording softened accordingly.
+- ndeadly (2026-04) renamed `0x03/0x02` to "Bluetooth Cancel" and notes
+  the `0x03` family is likely meant for USB/rail; it still works over
+  BLE here (Tier S).
+- macOS 26 / 27b7: no CoreBluetooth, CGEvent or TCC changes affect this
+  pipeline; macOS still does not pair Joy-Con 2 natively. Accessory
+  Design Guidelines R30 (2026-06) keeps the 15 ms non-HID interval
+  floor — the 33 Hz ceiling stands.
+
 ## [0.1.2] — 2026-05-30
 
 Audit-remediation pass: bug fixes, test-gap closure, value validation,

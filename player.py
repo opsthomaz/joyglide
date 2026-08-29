@@ -24,7 +24,6 @@ The lifecycle is:
      where the disconnect callback would trigger a reconnect mid-teardown),
      then closes the BLE client, then stops the pump task.
 """
-import gc
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
@@ -58,10 +57,6 @@ class Player:
         # Populated in main.connect_and_setup so the UI can identify each row.
         self.address: str | None = None
         self.name: str | None    = None
-        # Force a GC pass to help free anything held by a previous Player
-        # that occupied the same slot number (e.g. after a disconnect-reconnect
-        # cycle). Cheap insurance against leaked BLE references.
-        gc.collect()
         self.gamepad: JoyCon | None = None
 
     def __str__(self) -> str:
@@ -114,4 +109,3 @@ class Player:
         # Stop the motion pump so nothing keeps trying to inject events.
         if self.gamepad and self.gamepad._pump_task and not self.gamepad._pump_task.done():
             self.gamepad._pump_task.cancel()
-        gc.collect()

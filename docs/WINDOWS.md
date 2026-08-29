@@ -72,7 +72,7 @@ If the cursor feels closer to ~16-33 Hz, something is blocking the API. Check:
 |---|---|---|
 | Cursor injection | `Quartz.CGEventPost` (`osio/mouse/macos.py`) | Win32 `SendInput` via ctypes (`osio/mouse/windows.py`) |
 | Pause hotkey | `CGEventTap` ⌃⌥M (`osio/hotkey/macos.py`) | `RegisterHotKey` Ctrl+Alt+M (`osio/hotkey/windows.py`) |
-| Process priority | `os.nice(-10)` + `NSProcessInfo` Anti App-Nap | `SetPriorityClass(HIGH_PRIORITY_CLASS)` + `SetThreadExecutionState` |
+| Process priority | `NSProcessInfo` activity (LatencyCritical) + USER_INTERACTIVE thread QoS | `SetPriorityClass(HIGH_PRIORITY_CLASS)` + `SetThreadExecutionState` |
 | BLE rate boost | n/a (macOS doesn't honor any API) | `BluetoothLEPreferredConnectionParameters.ThroughputOptimized` |
 | Sub-pixel cursor | Native (Quartz accepts floats) | Software-accumulated (SendInput is integer-only) |
 | Accessibility prompt | First run requests permission | Not needed |

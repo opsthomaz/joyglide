@@ -103,7 +103,9 @@ current fields stay zeroed.
 The full report layout, sourced from
 `research/ndeadly_switch2/hid_reports.md` and cross-verified against
 `research/coffincolors_jc2mouse/src/jc2mouse/driver.py` and
-`TropicalCyclone/switch2-controller-driver/controller.py:118-148`:
+`Nadeflore/switch2-controllers/controller.py:125-140` (formerly cited as
+`TropicalCyclone/switch2-controller-driver`, a fork that was deleted in 2026 —
+same code, same line-by-line layout):
 
 | Offset | Size | Content |
 |---|---|---|
@@ -140,7 +142,8 @@ over BLE on macOS, May 2026):
 
 - Battery current at 0x22 was historically labelled "Battery
   Current?" by ndeadly with a question mark. We confirmed the **scale
-  is `raw / 100 = mA`** — both via TropicalCyclone's working driver
+  is `raw / 100 = mA`** — both via Nadeflore's working driver
+  (`controller.py:138`, `self.battery_current = decodeu(data[33:35]) / 100`)
   and via 818 s of hardware capture (raw 1820 → 18.2 mA matches the
   525 mAh / 20-h spec).
 - IMU timestamp scale was historically claimed by german77 to be a
@@ -191,7 +194,7 @@ treat "console subscribed to side-specific report" as "switch
 protocols, stop streaming common report."
 
 Every working open-source driver we cross-checked
-(`coffincolors/jc2mouse`, `TropicalCyclone/switch2-controller-driver`,
+(`coffincolors/jc2mouse`, `Nadeflore/switch2-controllers`,
 `TiernanDeFranco/JoyConPlusPlus`, `Misaka10571/joycon2-connector`)
 subscribes to exactly ONE input report — they hit the same constraint.
 
@@ -552,22 +555,27 @@ CGEventPost(kCGHIDEventTap, CGEventCreateMouseEvent(...))
 
 Cursor position is cached (`_cx`, `_cy`) and updated locally, avoiding a `CGEventCreate` call on every movement tick. Position is re-synced from the real cursor only before click events (`_sync_pos()`).
 
-### Anti App-Nap (main.py)
+### Anti App-Nap (osio/boost.py)
 ```python
-NSProcessInfo.processInfo().beginActivityWithOptions_reason_(0x00FFFFFF, "...")
+NSProcessInfo.processInfo().beginActivityWithOptions_reason_(
+    NSActivityUserInitiatedAllowingIdleSystemSleep | NSActivityLatencyCritical, "...")
 ```
-Prevents macOS from throttling asyncio timers when the window is minimized. Critical for keeping the pump at full rate in the background.
+Prevents macOS from throttling asyncio timers when the window is minimized, and `LatencyCritical` is Apple's flag for the highest timer / I-O availability (the "real-time audio" class) — it keeps the pump's ~16 ms deadlines out of timer coalescing. Idle system sleep is deliberately **allowed**: an earlier build passed the literal `0x00FFFFFF`, which is `NSActivityUserInitiated` *including* `IdleSystemSleepDisabled`, and silently kept the Mac awake. Use the named constants. (Tier B — Apple `NSProcessInfo` docs; constant values verified against pyobjc 12.2 on macOS 26.6.)
 
-### Process Priority
+### Thread QoS (osio/boost.py + bg_loop.py)
 ```python
-os.nice(-10)
+pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0)   # on the bg-loop thread
 ```
-Requests higher scheduler priority. Reduces asyncio jitter on the pump loop.
+The single background asyncio thread hosts every BLE callback and the motion pump. On Apple Silicon the QoS class is what keeps a thread on a performance core; a plain Python thread runs at `QOS_CLASS_DEFAULT` and can be parked on an efficiency core, which shows up as pump-tick jitter. `os.nice(-10)` is still attempted but always fails without root and never influenced core placement.
 
-### Display Refresh Rate Detection (mouse.py)
-`CGDisplayModeGetRefreshRate()` returns 0 on some Apple Silicon built-in displays (including MacBook Air M4 internal panel). Fallback uses `sysctl hw.model` to identify the hardware:
-- MacBook Air M4 (`Mac16,2` / `Mac16,3`): 60Hz
-- MacBook Pro with ProMotion: 120Hz
+### Display Refresh Rate Detection (osio/mouse/macos.py)
+`NSScreen.maximumFramesPerSecond` (AppKit, macOS 12+) — the maximum across all attached screens. It reports 120 on ProMotion panels where `CGDisplayModeGetRefreshRate()` returns 0 for adaptive-refresh built-in displays. Replaced a hard-coded list of ProMotion model identifiers that stopped at `Mac16,x`. Falls back to 60 Hz if no screen reports a plausible value.
+
+### Synthetic mouse deltas (osio/mouse/macos.py)
+`CGEventCreateMouseEvent` leaves `kCGMouseEventDeltaX/Y` at 0 (verified on macOS 26). Apps that read raw deltas instead of absolute position — FPS games with a captured cursor, `NSEvent.deltaX` consumers — saw no motion at all. Every Moved / Dragged event now carries the rounded per-event delta (same technique as Deskflow/Synergy).
+
+### Hotkey event tap self-healing (osio/hotkey/macos.py)
+WindowServer disables a `CGEventTap` whose callback is too slow (`kCGEventTapDisabledByTimeout`) and reports it by invoking the callback with that pseudo event type. A Python callback stalled by the GIL during a BLE burst is enough to trigger it; the callback now re-enables the tap instead of letting ⌃⌥M die silently.
 
 ---
 
@@ -579,7 +587,7 @@ Sourced from `ndeadly/switch2_controller_research` and `german77/JoyconDriver` (
 |-----------|------|-----------------|
 | `0x01` | NFC | `0x01`=Status, `0x02`=Read, `0x03`=Write |
 | `0x02` | **Flash Memory (SPI)** | **`0x01`=Read, `0x02`=Write, `0x03`=Erase** |
-| `0x03` | Initialization | `0x00`=BT Wake, `0x01`=Cancel |
+| `0x03` | Initialization | `0x01`=Bluetooth Wake, `0x02`=Bluetooth Cancel, `0x08`=Clear pairing info (ndeadly commands.md, 2026-04 naming). ndeadly notes these "appear to be intended for use over USB/rail connections"; `0x02` nonetheless works over BLE — its LED effect is hardware-verified here (Tier S) |
 | `0x08` | Charging Grip | `0x00`=Query, `0x01`=Enable |
 | `0x09` | Player LEDs | `0x07`=Set pattern |
 | `0x0A` | Vibration | `0x02`=Play preset, `0x08`=Raw LRA data |
@@ -746,8 +754,11 @@ Correct addresses to try (Joy-Con 2 specific, NOT the Joy-Con 1 addresses):
 | [dekuNukem/Nintendo_Switch_Reverse_Engineering](https://github.com/dekuNukem/Nintendo_Switch_Reverse_Engineering) | Joy-Con **1** full protocol (BT Classic, SPI, HID subcommands) | Complete |
 | [ndeadly/switch2_controller_research](https://github.com/ndeadly/switch2_controller_research) | Joy-Con **2** memory map, command IDs, pairing handshake | Active (~78 stars) |
 | [german77/JoyconDriver](https://github.com/german77/JoyconDriver) | Wireshark Lua dissector for all Switch 2 controller protocols | Active |
-| [darthcloud/BlueRetro](https://github.com/darthcloud/BlueRetro) | Bluetooth adapter; includes `sw2.c` with HID report structs | Active |
-| [coffincolors/jc2mouse](https://github.com/coffincolors/jc2mouse) | Joy-Con **2** Linux userspace BLE driver | Active |
+| [darthcloud/BlueRetro](https://github.com/darthcloud/BlueRetro) | Bluetooth adapter; includes `sw2.c` with HID report structs | **Archived 2025-12-14** (`sw2.c` unchanged since 2025-07) |
+| [coffincolors/jc2mouse](https://github.com/coffincolors/jc2mouse) | Joy-Con **2** Linux userspace BLE driver | Last commit 2026-03; open BlueZ GATT-discovery issues |
+| [Nadeflore/switch2-controllers](https://github.com/Nadeflore/switch2-controllers) | Python Windows driver — source of the `raw / 100 = mA` battery-current cross-check (previously cited via the now-deleted TropicalCyclone fork) | Last commit 2025-11 |
+| [TheFrano/joycon2cpp](https://github.com/TheFrano/joycon2cpp) | Windows C++ driver; v1.3 (2026-06) added HD rumble + a console-captured init sequence using feature mask **0x37** | Active |
+| [OZORDI/JoyCon2Mac](https://github.com/OZORDI/JoyCon2Mac) | **macOS-native** CoreBluetooth + DriverKit driver (needs SIP/AMFI off). Uses mask `0xFF` and subscribes input 0x05 + response `c765a961` together — independent Tier-C corroboration of two findings in this doc | Created 2026-05, active |
 | [NVNTLabs/Switch2-Mouse](https://github.com/NVNTLabs/Switch2-Mouse) | Hardware sniffing with Nordic nRF52840 | WIP, no code published |
 | [CTCaer/jc_toolkit](https://github.com/CTCaer/jc_toolkit) | Joy-Con 1 + 2 calibration toolkit | Partial Joy-Con 2 support |
 
@@ -773,7 +784,7 @@ No significant Joy-Con 2 reverse engineering activity found on Russian, Chinese,
 
 3. **SPI flash inaccessible** — Joy-Con 2 does not respond to Joy-Con 1 SPI read subcommand `0x10` over GATT. Firmware dump is not possible with current public knowledge.
 
-4. **Single event loop per controller** — Each `tray_connect_new_controller()` call spawns a new event loop on a new thread. The pump task lives on that loop. With multiple controllers, each has an independent loop — there is no shared scheduling.
+4. **One shared event loop for every controller** — `tray_connect_new_controller()` schedules the connect flow on the singleton background loop (`bg_loop`), and every player's BLE callbacks and pump task live there. One daemon thread hosts them all (and carries the USER_INTERACTIVE QoS); a stall in one controller's callback delays the others' pump ticks.
 
 5. **asyncio.sleep jitter** — The pump uses `asyncio.sleep(1/Hz)` which is not a real-time timer. Under system load, ticks can slip 2–5ms. The Dynamic profile's `dt`-based `drain_factor` compensates for this automatically.
 

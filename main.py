@@ -5,9 +5,10 @@ Wires the major subsystems together:
 
   * **BLE scan / connect / reconnect** via ``ble.connection`` (which
     builds on ``ble.protocol`` for the wire-level commands).
-  * **Per-controller state** in ``Player``. Each player owns its own
-    asyncio loop on its own daemon thread, so multiple controllers can
-    run concurrently without contention.
+  * **Per-controller state** in ``Player``. Every player's BLE client,
+    notification callbacks and motion pump run on the single shared
+    background asyncio loop (``bg_loop``) — one daemon thread hosts them
+    all, which is also the thread that gets USER_INTERACTIVE QoS.
   * **Cross-platform boot hooks** (priority boost, anti-throttle, Windows
     BLE rate negotiation) via ``platform_setup``.
   * **Tray icon and dashboard UI** (``tray.create_icon`` builds the
@@ -70,8 +71,9 @@ async def handle_single_joycon(client, player: "Player") -> None:
     and route each packet through ``solo_logic.handle_single_notification``
     (which fans out to the parser/engine on the player's gamepad).
 
-    Idempotent: bleak's ``start_notify`` raises ``BleakError(
-    "Characteristic notifications already started")`` when called twice.
+    Idempotent: bleak's ``start_notify`` raises ``ValueError(
+    "Characteristic notifications already started")`` (``BleakError`` in
+    bleak < 2) when called twice.
     On macOS the disconnect callback occasionally fires spuriously
     (without a real link drop), and the reconnect path re-runs this
     handler — without the swallow, the maintain loop cascades into
@@ -79,11 +81,9 @@ async def handle_single_joycon(client, player: "Player") -> None:
     a no-op here is the correct behaviour; if it isn't, the next real
     disconnect will trigger a clean reconnect.
 
-    Also subscribes to the side-specific report (0x07 JC-L / 0x08 JC-R)
-    when ``player.side`` is already known, so we get the firmware's own
-    battery-level estimate. For new devices where side is picked via the
-    modal, ``player.attach_joycon`` will trigger the second subscribe
-    later.
+    Deliberately does NOT subscribe to the side-specific report
+    (0x07 JC-L / 0x08 JC-R) — see the NOTE below for the hardware
+    finding behind that.
     """
     def cb(sender, data):
         """bleak start_notify callback — fires per BLE notification."""
@@ -91,9 +91,9 @@ async def handle_single_joycon(client, player: "Player") -> None:
     try:
         await client.start_notify(INPUT_REPORT_UUID, cb)
     except Exception as e:
-        # bleak doesn't expose a typed "already started" error class
-        # (and the message string is the only signal). Match by content
-        # to avoid swallowing genuine subscription failures.
+        # bleak raises a plain ValueError here (BleakError before 2.0)
+        # — the message string is the only stable signal. Match by
+        # content to avoid swallowing genuine subscription failures.
         if "already started" in str(e).lower():
             log.debug(f"start_notify already active on {client.address} — skipping")
         else:
