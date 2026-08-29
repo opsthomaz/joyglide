@@ -100,3 +100,27 @@ class TestScanPermissionDenied:
             events.append(cq.get_nowait())
         assert events[-1]["data"]["color"] == "#e74c3c"
         assert "Bluetooth" in events[-1]["data"]["text"]
+
+
+class TestConnectDeadline:
+    """``connect_and_setup`` must not hang forever if the BLE stack never
+    answers. bleak 3.0.2's CoreBluetooth ``connect`` awaits a disconnect
+    future with no timeout after its own timeout fires; if CoreBluetooth
+    never calls back, the coroutine is stuck for good. A deadline of our
+    own turns that into a ``TimeoutError`` the caller already handles
+    (address released, Sync button re-enabled)."""
+
+    def test_hung_connect_raises_timeout(self, monkeypatch):
+        class _HangingClient(_StubClient):
+            async def connect(self, timeout=None):
+                await asyncio.Event().wait()   # never
+
+        monkeypatch.setattr(bc, "BleakClient", _HangingClient)
+        monkeypatch.setattr(bc, "CONNECT_DEADLINE_S", 0.05)
+        device = types.SimpleNamespace(address="AA:BB", name="Joy-Con (R)")
+
+        async def handler(_client, _player):
+            return None
+
+        with pytest.raises(TimeoutError):
+            asyncio.run(bc.connect_and_setup(device, _player(), handler, queue.Queue()))

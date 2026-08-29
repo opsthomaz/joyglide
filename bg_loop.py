@@ -26,6 +26,16 @@ _background_loop: asyncio.AbstractEventLoop | None = None
 # create separate loops, and both assign — the second wins, the first
 # is orphaned with its scheduled tasks lost.
 _start_lock = threading.Lock()
+# Strong references to in-flight futures. asyncio keeps only *weak* refs to
+# tasks; a task blocked on a future that is reachable solely through its
+# own frame (a cycle) has no owner and gets garbage-collected mid-await —
+# "Task was destroyed but it is pending!". Seen 2026-08-29 when bleak's
+# CoreBluetooth connect waited on a disconnect future with no timeout: the
+# add_player task vanished, its done-callback never ran and the Sync
+# button stayed disabled. The concurrent.futures.Future returned by
+# run_coroutine_threadsafe holds the task (via its cancel-chaining
+# callback), so holding the future is enough.
+_pending: set = set()
 
 
 def _start_background_loop() -> None:
@@ -55,7 +65,10 @@ def run(coro):
     if _background_loop is None:
         _start_background_loop()
     assert _background_loop is not None  # narrowing for type checkers — start above guarantees this
-    return asyncio.run_coroutine_threadsafe(coro, _background_loop)
+    fut = asyncio.run_coroutine_threadsafe(coro, _background_loop)
+    _pending.add(fut)
+    fut.add_done_callback(_pending.discard)
+    return fut
 
 
 def save_settings_async() -> None:

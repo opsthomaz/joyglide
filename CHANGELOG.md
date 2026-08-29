@@ -4,6 +4,25 @@ All notable changes to Joyglide are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Sync could get stuck on "Connecting…" forever** with the controller
+  no longer blinking and every further Sync press ignored. Root cause:
+  bleak 3.0.2's CoreBluetooth `connect`, after its own timeout, awaits
+  the didDisconnect callback with no timeout; when CoreBluetooth never
+  delivers it the coroutine hangs, and because asyncio only holds weak
+  references to tasks, the `add_player` task — reachable only through
+  its own reference cycle — was garbage-collected mid-await ("Task was
+  destroyed but it is pending!"), so the done-callback that re-enables
+  Sync never ran. Fixes: `bg_loop.run` now retains every in-flight
+  future until it completes, and both connect paths are wrapped in a
+  12 s `asyncio.wait_for` deadline so a hung stack surfaces as a normal
+  "Connection failed — try again". 3 tests.
+- Ubuntu CI `mypy` failure in `osio/hotkey/linux.py` (bytes in an
+  f-string) that had been red since the Linux backend landed.
+
 ## [0.1.3] — 2026-08-29
 
 Full-codebase audit (2026-08-29): line-by-line review, re-verification of

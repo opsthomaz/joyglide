@@ -38,6 +38,17 @@ from user_preferences import settings
 
 log = get_logger(__name__)
 
+# bleak's own connect timeout (seconds) — how long CoreBluetooth may take
+# to bring the link up.
+CONNECT_TIMEOUT_S = 5.0
+# Our hard deadline around the whole ``client.connect`` call. bleak 3.0.2's
+# CoreBluetooth backend, after *its* timeout fires, cancels the peripheral
+# connection and then awaits the didDisconnect callback with no timeout;
+# if CoreBluetooth never delivers it (controller stopped advertising
+# mid-connect, 2026-08-29) the coroutine hangs forever. wait_for turns that
+# into a TimeoutError the callers already handle.
+CONNECT_DEADLINE_S = 12.0
+
 
 async def scan_device(used_addresses: set, prompt: str = "controller", *,
                        command_queue=None, timeout: float = 30.0):
@@ -178,7 +189,7 @@ async def connect_and_setup(device, player, handler_func, command_queue,
     # succeeded. (The reconnect loop deliberately uses the address, see
     # maintain_connection_loop.) ``disconnected_callback`` accepts None.
     client = BleakClient(device, disconnected_callback=disconnect_cb)
-    await client.connect(timeout=5.0)
+    await asyncio.wait_for(client.connect(timeout=CONNECT_TIMEOUT_S), CONNECT_DEADLINE_S)
     player.address = device.address
     player.name    = device.name or "Joy-Con"
     await asyncio.sleep(0.5)
@@ -236,7 +247,7 @@ async def maintain_connection_loop(client, device, player, handler_func,
             # device is powered off"). We rebuild and re-register the
             # caller-provided disconnect callback.
             client = BleakClient(device.address, disconnected_callback=disconnect_cb)
-            await client.connect(timeout=5.0)
+            await asyncio.wait_for(client.connect(timeout=CONNECT_TIMEOUT_S), CONNECT_DEADLINE_S)
 
             # Settle delay — same as the initial connect_and_setup has.
             # Without this, post_connect_setup's writes (set_leds,
