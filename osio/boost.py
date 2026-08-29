@@ -58,13 +58,28 @@ def _boost_macos() -> None:
 
     # Anti App-Nap — a separate concern, but fits naturally here.
     try:
-        from Foundation import NSProcessInfo
-        global _ANTI_NAP_ACTIVITY
-        # NSActivityUserInitiatedAllowingIdleSystemSleep = 0x00FFFFFF
-        _ANTI_NAP_ACTIVITY = NSProcessInfo.processInfo().beginActivityWithOptions_reason_(
-            0x00FFFFFF, "Joyglide low-latency input pump"
+        from Foundation import (
+            NSActivityLatencyCritical,
+            NSActivityUserInitiatedAllowingIdleSystemSleep,
+            NSProcessInfo,
         )
-        log.info("🛡️ Anti App-Nap protection active.")
+        global _ANTI_NAP_ACTIVITY
+        # Use the named constants, never a literal: an earlier build passed
+        # 0x00FFFFFF believing it was *AllowingIdleSystemSleep*, but that
+        # value is NSActivityUserInitiated, which carries the
+        # IdleSystemSleepDisabled bit (0x100000) — the app was silently
+        # keeping the whole Mac from idle-sleeping. AllowingIdleSystemSleep
+        # is 0x00EFFFFF.
+        #
+        # LatencyCritical (0xFF00000000) is Apple's flag for work that needs
+        # the highest timer / I-O availability ("real-time audio" class).
+        # Without it, timer coalescing can delay the pump's ~16 ms
+        # asyncio.sleep deadlines when our window isn't focused.
+        options = NSActivityUserInitiatedAllowingIdleSystemSleep | NSActivityLatencyCritical
+        _ANTI_NAP_ACTIVITY = NSProcessInfo.processInfo().beginActivityWithOptions_reason_(
+            options, "Joyglide low-latency input pump"
+        )
+        log.info("🛡️ Anti App-Nap protection active (latency-critical, idle sleep allowed).")
     except Exception as e:
         log.warning(f"⚠️ Failed to init Anti App-Nap: {e}")
 

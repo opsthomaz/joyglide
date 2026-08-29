@@ -125,10 +125,27 @@ def _screen_bounds():
     return width, height, refresh_rate
 
 
-def _post(event_type, pos, button=CG.kCGMouseButtonLeft, click_count=1):
+_MOVE_EVENT_TYPES = (CG.kCGEventMouseMoved,
+                     CG.kCGEventLeftMouseDragged,
+                     CG.kCGEventRightMouseDragged,
+                     CG.kCGEventOtherMouseDragged)
+
+
+def _post(event_type, pos, button=CG.kCGMouseButtonLeft, click_count=1, *,
+          delta: "tuple[float, float] | None" = None):
     """One-shot helper: build a CGEventMouseEvent and post it on the
     HID event tap (the lowest injection point — same path real input
     devices take, so apps can't tell our events from hardware).
+
+    ``delta`` (dx, dy) is written into ``kCGMouseEventDeltaX/Y`` for
+    Moved / Dragged events. ``CGEventCreateMouseEvent`` leaves those
+    fields at 0 (verified on macOS 26), and consumers that read raw
+    deltas rather than absolute position — FPS games with a captured
+    cursor, ``NSEvent.deltaX`` users — saw no motion from Joyglide at
+    all. The fields are integer-valued, so the float delta is rounded to
+    nearest (not truncated) so sub-pixel moves still register once they
+    cross ±0.5 px. Same technique as Deskflow/Synergy's synthetic
+    relative moves.
 
     Always sets ``kCGMouseEventClickState`` for Down/Up events. Earlier
     versions only set it when ``click_count > 1``, leaving the field at
@@ -159,6 +176,9 @@ def _post(event_type, pos, button=CG.kCGMouseButtonLeft, click_count=1):
                       CG.kCGEventRightMouseDown, CG.kCGEventRightMouseUp,
                       CG.kCGEventOtherMouseDown, CG.kCGEventOtherMouseUp):
         CG.CGEventSetIntegerValueField(ev, CG.kCGMouseEventClickState, max(1, click_count))
+    elif delta is not None and event_type in _MOVE_EVENT_TYPES:
+        CG.CGEventSetIntegerValueField(ev, CG.kCGMouseEventDeltaX, round(delta[0]))
+        CG.CGEventSetIntegerValueField(ev, CG.kCGMouseEventDeltaY, round(delta[1]))
     CG.CGEventPost(CG.kCGHIDEventTap, ev)
 
     if trace:
@@ -295,12 +315,13 @@ class InputSimulator:
         self._cy += dy
         self._clamp()
         pos = (self._cx, self._cy)
+        delta = (dx, dy)
         if self._left_down:
-            _post(CG.kCGEventLeftMouseDragged, pos)
+            _post(CG.kCGEventLeftMouseDragged, pos, delta=delta)
         elif self._right_down:
-            _post(CG.kCGEventRightMouseDragged, pos, CG.kCGMouseButtonRight)
+            _post(CG.kCGEventRightMouseDragged, pos, CG.kCGMouseButtonRight, delta=delta)
         else:
-            _post(CG.kCGEventMouseMoved, pos)
+            _post(CG.kCGEventMouseMoved, pos, delta=delta)
 
     def mouse_down(self) -> None:
         """Press the left mouse button. Re-syncs position from the real
