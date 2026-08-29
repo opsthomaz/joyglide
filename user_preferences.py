@@ -51,6 +51,8 @@ DEFAULTS = {
 
     # ── Input ───────────────────────────────────────────────────────────
     "double_click_enabled": True,     # rapid press within 400ms = double-click
+    "swap_click_buttons": False,      # False: shoulder L/R = left click, trigger ZL/ZR = right
+                                      # True:  trigger = left click, shoulder = right
 
     # ── Hardware ────────────────────────────────────────────────────────
     "vibration_on_connect": True,     # play the PAIRING haptic when a JC2 connects

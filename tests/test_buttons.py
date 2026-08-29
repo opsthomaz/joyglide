@@ -32,6 +32,7 @@ def _state(side: str = "right"):
     s.is_left = (side == "left")
     s.paused = False
     s.last_data = None
+    s._held_ups = {}
     return s
 
 
@@ -146,3 +147,53 @@ class TestRuntPacketGuard:
         state.last_data = prev
         parser.buttons.parse(state, b"\x00\x00\x00\x00")
         assert state.last_data == prev
+
+
+class TestSwapClickButtons:
+    """``settings["swap_click_buttons"]`` flips the click layout: trigger
+    (ZL/ZR) becomes the left click and shoulder (L/R) the right click.
+    Default off keeps the documented layout (shoulder = left)."""
+
+    def test_default_layout_shoulder_is_left(self, monkeypatch):
+        monkeypatch.setitem(parser.buttons.settings, "swap_click_buttons", False)
+        state = _state("right")
+        parser.buttons.parse(state, _right_packet(0))
+        parser.buttons.parse(state, _right_packet(MASKS["right"]["R"]))
+        state.input_simulator.mouse_down.assert_called_once()
+        state.input_simulator.mouse_down_right.assert_not_called()
+
+    def test_swapped_R_fires_right_click(self, monkeypatch):
+        monkeypatch.setitem(parser.buttons.settings, "swap_click_buttons", True)
+        state = _state("right")
+        parser.buttons.parse(state, _right_packet(0))
+        parser.buttons.parse(state, _right_packet(MASKS["right"]["R"]))
+        state.input_simulator.mouse_down_right.assert_called_once()
+        state.input_simulator.mouse_down.assert_not_called()
+
+    def test_swapped_ZR_fires_left_click(self, monkeypatch):
+        monkeypatch.setitem(parser.buttons.settings, "swap_click_buttons", True)
+        state = _state("right")
+        parser.buttons.parse(state, _right_packet(0))
+        parser.buttons.parse(state, _right_packet(MASKS["right"]["ZR"]))
+        state.input_simulator.mouse_down.assert_called_once()
+        state.input_simulator.mouse_down_right.assert_not_called()
+
+    def test_swapped_left_side_ZL_fires_left_click(self, monkeypatch):
+        monkeypatch.setitem(parser.buttons.settings, "swap_click_buttons", True)
+        state = _state("left")
+        parser.buttons.parse(state, _left_packet(0))
+        parser.buttons.parse(state, _left_packet(MASKS["left"]["ZL"]))
+        state.input_simulator.mouse_down.assert_called_once()
+
+    def test_release_uses_layout_active_at_press(self, monkeypatch):
+        """Toggling the swap while a button is held must not strand a
+        button: the release fires the counterpart of whatever the press
+        fired, not whatever the new layout says."""
+        monkeypatch.setitem(parser.buttons.settings, "swap_click_buttons", False)
+        state = _state("right")
+        parser.buttons.parse(state, _right_packet(0))
+        parser.buttons.parse(state, _right_packet(MASKS["right"]["R"]))   # left down
+        monkeypatch.setitem(parser.buttons.settings, "swap_click_buttons", True)
+        parser.buttons.parse(state, _right_packet(0))                     # release
+        state.input_simulator.mouse_up.assert_called_once()
+        state.input_simulator.mouse_up_right.assert_not_called()

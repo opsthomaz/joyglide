@@ -49,6 +49,13 @@ gates green (268 tests, ruff / pyright / mypy / import-linter / xenon).
 - Docstrings in `main.py` / `ARCHITECTURE.md` still described one event
   loop per controller; every controller shares the `bg_loop` singleton.
 
+### Added
+
+- **`swap_click_buttons` setting** (Settings tab → Input): trigger
+  ZL/ZR = left click, shoulder L/R = right click. Default off keeps the
+  documented layout. The release event always pairs with the press that
+  was actually fired, so toggling mid-press can't strand a button.
+
 ### Changed
 
 - **Display refresh rate via `NSScreen.maximumFramesPerSecond`**

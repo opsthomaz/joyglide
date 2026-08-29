@@ -528,6 +528,7 @@ All settings persisted to JSON via `platformdirs` (macOS: `~/Library/Application
 | `acceleration_level` | int | `2` | Accel curve intensity: 1=Low, 2=Med, 3=High |
 | `scroll_sensitivity` | int | `4` | Stick scroll speed (1–10, normalized to 4=1.0x) |
 | `double_click_enabled` | bool | `true` | Rapid press within 400ms = double-click |
+| `swap_click_buttons` | bool | `false` | `false`: shoulder L/R = left click, trigger ZL/ZR = right. `true`: swapped. Release always pairs with the press that was fired, so toggling mid-press can't strand a button |
 | `vibration_on_connect` | bool | `true` | Haptic feedback when controller connects |
 | `show_gatt_dump` | bool | `false` | Print full GATT profile to terminal on connect |
 | `start_with_sync` | bool | `false` | Auto-start BLE scan on app launch |

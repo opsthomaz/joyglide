@@ -58,6 +58,9 @@ class JoyCon:
         self.is_left          = side != "right"
         self.last_mouse_pos: tuple[int | None, int | None]   = (None, None)
         self.last_data: bytes | None        = None
+        # Button name → release method for buttons currently held (see
+        # parser.buttons); cleared whenever last_data is reset.
+        self._held_ups: dict[str, str] = {}
         self._dx_accum        = 0.0
         self._dy_accum        = 0.0
         self._scroll_x_accum  = 0.0
@@ -133,6 +136,7 @@ class JoyCon:
         that would otherwise come from stale accumulator/last-position values."""
         self.last_mouse_pos = (None, None)
         self.last_data      = None
+        self._held_ups.clear()
         self._dx_accum      = 0.0
         self._dy_accum      = 0.0
         self._scroll_x_accum = 0.0
@@ -146,6 +150,7 @@ class JoyCon:
         self.side    = side
         self.is_left = side != "right"
         self.last_data = None
+        self._held_ups.clear()
 
     def _on_pump_done(self, _task: "asyncio.Task") -> None:
         """Pump-task done callback — clears the running flag so a future

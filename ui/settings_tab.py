@@ -10,7 +10,7 @@ class SettingsMixin:
     """Adds the Settings tab to ``JoyglideUI``.
 
     Exposes Tk variables (``self.start_sync_var``, ``self.ignore_win_var``,
-    ``self.double_click_var``, ``self.vibration_var``,
+    ``self.double_click_var``, ``self.swap_click_var``, ``self.vibration_var``,
     ``self.gatt_dump_var``) that ``reset_to_defaults`` reaches into to
     refresh the UI when the user nukes their preferences.
     """
@@ -55,6 +55,13 @@ class SettingsMixin:
         self.double_click_var = ctk.BooleanVar(value=settings.get("double_click_enabled", True))
         ctk.CTkSwitch(tab, text="Double-click detection (rapid press = double-click)",
                        variable=self.double_click_var,
+                       command=self.save_settings_tab).grid(
+            row=row, column=0, pady=6, padx=16, sticky="w")
+        row += 1
+
+        self.swap_click_var = ctk.BooleanVar(value=settings.get("swap_click_buttons", False))
+        ctk.CTkSwitch(tab, text="Swap click buttons (trigger ZL/ZR = left click, shoulder L/R = right)",
+                       variable=self.swap_click_var,
                        command=self.save_settings_tab).grid(
             row=row, column=0, pady=6, padx=16, sticky="w")
         row += 1
@@ -127,6 +134,7 @@ class SettingsMixin:
             self.start_sync_var.set(settings["start_with_sync"])
             self.ignore_win_var.set(settings["ignore_opening_window"])
             self.double_click_var.set(settings["double_click_enabled"])
+            self.swap_click_var.set(settings["swap_click_buttons"])
             self.vibration_var.set(settings["vibration_on_connect"])
             self.gatt_dump_var.set(settings["show_gatt_dump"])
             confirm.destroy()
@@ -143,6 +151,7 @@ class SettingsMixin:
         settings["start_with_sync"]       = self.start_sync_var.get()
         settings["ignore_opening_window"] = self.ignore_win_var.get()
         settings["double_click_enabled"]  = self.double_click_var.get()
+        settings["swap_click_buttons"]    = self.swap_click_var.get()
         settings["vibration_on_connect"]  = self.vibration_var.get()
         settings["show_gatt_dump"]        = self.gatt_dump_var.get()
         save_settings(settings)

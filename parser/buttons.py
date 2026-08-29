@@ -8,6 +8,7 @@ are logged at DEBUG level only.
 """
 from applog import get_logger
 from parser.button_masks import MASKS
+from user_preferences import settings
 
 log = get_logger(__name__)
 
@@ -42,6 +43,16 @@ _MOUSE_METHODS = {
     "RIGHT": ("mouse_down_forward", "mouse_up_forward"),
 }
 
+# ``settings["swap_click_buttons"]`` layout: trigger = left click,
+# shoulder = right click. Everything else is identical.
+_MOUSE_METHODS_SWAPPED = {
+    **_MOUSE_METHODS,
+    "R":  ("mouse_down_right", "mouse_up_right"),
+    "L":  ("mouse_down_right", "mouse_up_right"),
+    "ZR": ("mouse_down",       "mouse_up"),
+    "ZL": ("mouse_down",       "mouse_up"),
+}
+
 
 def parse(state, data: bytes) -> None:
     """Diff button state from previous packet, emit click events."""
@@ -72,14 +83,32 @@ def parse(state, data: bytes) -> None:
         return
 
     sim = state.input_simulator
+    table = _MOUSE_METHODS_SWAPPED if settings.get("swap_click_buttons", False) else _MOUSE_METHODS
+    # ``state._held_ups`` remembers, per held button, the release method
+    # that pairs with the press we actually fired — so toggling the swap
+    # setting mid-press still releases the right mouse button instead of
+    # stranding one in the "down" state.
+    held = state._held_ups
     for name, mask in button_map.items():
         pressed      = bool(cur_state & mask)
         last_pressed = bool(last_state & mask)
         if pressed == last_pressed:
             continue
 
-        methods = _MOUSE_METHODS.get(name)
-        if methods is not None:
-            getattr(sim, methods[0] if pressed else methods[1])()
-        elif not pressed:
-            log.debug(name)
+        if pressed:
+            methods = table.get(name)
+            if methods is not None:
+                held[name] = methods[1]
+                getattr(sim, methods[0])()
+        else:
+            # Prefer the release recorded at press time; fall back to the
+            # current table when there is none (e.g. ``last_data`` was
+            # seeded with the button already held).
+            up = held.pop(name, None)
+            if up is None:
+                methods = table.get(name)
+                up = methods[1] if methods is not None else None
+            if up is not None:
+                getattr(sim, up)()
+            else:
+                log.debug(name)
