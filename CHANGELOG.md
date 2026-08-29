@@ -4,7 +4,7 @@ All notable changes to Joyglide are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.3] — 2026-08-29
 
 Full-codebase audit (2026-08-29): line-by-line review, re-verification of
 every upstream protocol source, and a macOS 26 / toolchain refresh. All
@@ -302,5 +302,6 @@ Joyglide descends from prior reverse-engineering work — most directly
 [moutella/joycon2mouse](https://github.com/moutella/joycon2mouse). See
 `NOTICE` for full attribution.
 
+[0.1.3]: https://github.com/opsthomaz/joyglide/releases/tag/v0.1.3
 [0.1.2]: https://github.com/opsthomaz/joyglide/releases/tag/v0.1.2
 [0.1.0]: https://github.com/opsthomaz/joyglide/releases/tag/v0.1.0
