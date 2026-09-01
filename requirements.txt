@@ -39,4 +39,4 @@ pyobjc-framework-ApplicationServices>=12.2.1; sys_platform == 'darwin'
 evdev>=1.9.3; sys_platform == 'linux'
 
 # ── Build/packaging (cross-platform) ─────────────────────────────────────
-pyinstaller>=6.22.0
+pyinstaller>=6.22.2
