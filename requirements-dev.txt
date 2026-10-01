@@ -19,7 +19,7 @@ xenon>=0.9.3
 codespell>=2.4.3
 yamllint>=1.38.0
 import-linter>=2.14
-hypothesis>=6.165.10
+hypothesis>=6.168.3
 pip-audit>=2.10.1
 mutmut>=3.8.0
 # cosmic-ray covers the parser/ package where mutmut hits its package-import
