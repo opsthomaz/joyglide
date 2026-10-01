@@ -8,7 +8,7 @@
 
 # ── Core (cross-platform) ────────────────────────────────────────────────
 bleak>=3.0.2
-pillow>=12.2.0
+pillow>=12.3.0
 pystray>=0.19.5
 platformdirs>=4.9.6
 customtkinter>=5.2.2
