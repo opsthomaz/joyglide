@@ -10,7 +10,7 @@
 bleak>=3.0.2
 pillow>=12.3.0
 pystray>=0.19.5
-platformdirs>=4.9.6
+platformdirs>=4.14.0
 customtkinter>=5.2.2
 
 # ── macOS only ───────────────────────────────────────────────────────────
