@@ -3,7 +3,7 @@
 # Used by the CI lint and test workflows; not bundled into release artifacts.
 
 # Test runner + coverage
-pytest>=9.1.1
+pytest>=9.2.0
 pytest-cov>=7.1.0
 
 # Static analysis (also runs in CI lint workflow)
