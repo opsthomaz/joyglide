@@ -36,7 +36,7 @@ pyobjc-framework-ApplicationServices>=12.2.1; sys_platform == 'darwin'
 # library coffincolors/jc2mouse uses — well-tested, widely-shipped, no
 # transitive baggage. Membership in the `input` group + the standard udev
 # rule on /dev/uinput is the runtime requirement.
-evdev>=1.9.3; sys_platform == 'linux'
+evdev>=2.0.0; sys_platform == 'linux'
 
 # ── Build/packaging (cross-platform) ─────────────────────────────────────
 pyinstaller>=6.22.2
