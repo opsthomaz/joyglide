@@ -11,7 +11,7 @@ bleak>=3.0.2
 pillow>=12.3.0
 pystray>=0.19.5
 platformdirs>=4.14.0
-customtkinter>=5.2.2
+customtkinter>=6.0.0
 
 # ── macOS only ───────────────────────────────────────────────────────────
 pyobjc-framework-Quartz>=12.2.2;            sys_platform == 'darwin'
